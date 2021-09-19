@@ -3,15 +3,25 @@ library(terra)
 library(tidyverse)
 library(rcrea)
 library(creahelpers)
+library(mgcv)
+library(tictoc)
+library(snow)
+library(tictoc)
+library(countrycode)
+library(pbapply)
+
 readRenviron(".Renviron")
 
+dir.create("cache", showWarnings = F)
+dir.create("results", showWarnings = F)
+
+rasterOptions(tmpdir="/mnt/data/tmp/raster") # To avoid filling sda1
+
 source('data.R')
+source('utils.R')
+source('adjust_global.R')
 
-obs.2018 <- data.get_obs(year=2019)
-obs.2019 <- data.get_obs(year=2019)
-obs.2020 <- data.get_obs(year=2020)
-
+message("2pt5_min")
 res <- "2pt5_min"
 pop <- data.pop(res=res)
-
 
