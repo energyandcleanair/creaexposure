@@ -22,3 +22,11 @@ utils.focal_mean <- function(r, d_deg, pop, res, use_cache=T){
     terra::rast(f)
   }
 }
+
+utils.to_raster <- function(x){
+  if(class(x)[1]!="RasterLayer"){
+    raster(x)
+  }else{
+    x
+  }
+}

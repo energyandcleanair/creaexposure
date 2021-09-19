@@ -31,6 +31,34 @@ data.get_obs <- function(polls=c("pm25","no2"), year=2020, use_cache=T){
       ungroup() %>%
       dplyr::mutate(geometry = sf::st_as_sfc(geometry))
 
+    # We add Philipines data assuming year doesn't matter
+    obs_ph <- read_csv("data/ph_emb_derived_pm25.csv") %>%
+      mutate(location_id=MonitorID,
+             country="PH",
+             poll="pm25",
+             unit="µg/m3",
+             source="em",
+             type=PM2.5_inferred_basis,
+             value=pm25) %>%
+      sf::st_as_sf(coords=c("Lon","Lat")) %>%
+      select(location_id, country, poll, unit, source, type, value, geometry) %>%
+      as.data.frame()
+
+    obs <- bind_rows(obs, obs_ph)
+
+
+    # NO2: 1 ppb = 1.88 µg/m3
+    idx_ppm_to_ugm3 <- obs$unit=="ppm" & obs$poll=="no2"
+    obs[idx_ppm_to_ugm3, "value"] <- obs[idx_ppm_to_ugm3, "value"] * 1880
+    obs[idx_ppm_to_ugm3, "unit"] <- "µg/m3"
+
+    idx_ppb_to_ugm3 <- obs$unit=="ppb" & obs$poll=="no2"
+    obs[idx_ppb_to_ugm3, "value"] <- obs[idx_ppb_to_ugm3, "value"] * 1.88
+    obs[idx_ppb_to_ugm3, "unit"] <- "µg/m3"
+
+    # A weird ZA measurement
+    obs=obs[obs$unit!="m/s",]
+
     saveRDS(obs, f)
     return(obs)
   }
@@ -170,8 +198,8 @@ data.predictors <- function(pop, res){
   distance_coast <- data.distance_coast(pop, res, use_cache=T)
   # distance_urban <- data.distance_urban(pop, res, saturation_km=100, use_cache=T)
   grump <- data.grump(pop, res, use_cache=T)
-  gadm0 <- data.gadm_raster(pop, res, level=0)
-  gadm1 <- data.gadm_raster(pop, res, level=1)
+  gadm0 <- raster(data.gadm_raster(pop, res, level=0))
+  gadm1 <- raster(data.gadm_raster(pop, res, level=1))
 
   srtm <- data.srtm(pop, res, use_cache=T)
   srtm_05deg <- utils.focal_mean(srtm, d_deg=0.5, pop=pop, res=res, use_cache=T)
@@ -209,7 +237,7 @@ data.predictors <- function(pop, res){
   )
 
   #rs: raster stack
-  predictors <- lapply(predictors, raster) %>% raster::stack()
+  predictors <- lapply(predictors, utils.to_raster) %>% raster::stack()
   names(predictors) <- names(predictors)
 
   # Adding surrogate variables
