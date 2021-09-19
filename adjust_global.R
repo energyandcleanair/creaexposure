@@ -27,25 +27,32 @@ adjust_global <- function(pop, res){
     "ZA"="ZA"
   )
 
-  lapply(names(regions), function(r){
+  obs$region <- NA
+  for(r in names(regions)){
     obs[obs$country %in% regions[[r]], "region"] <- r
-  })
-
+  }
 
   # Adjust PM2.5
   obs_pm25 <- obs %>% filter(poll=="pm25") %>% mutate(diff_pm25=value-pm25_prior)
 
+  # IT HAS SIGNIFICANT IMPLICATIONS TO INCLUDE PRIOR
+  # It means prior is systematically biased e.g. overestimating/underestimating high values
+  # + risk of overfitting
+  # We've manually checked smooth terms for s(pm25_prior) for every fitting and checked
+  # it looked alright (e.g. low edf, consistent trend)
+
   pm25_formulas <- list(
-    # "CN" = diff_pm25 ~  s(srtm_diff05deg) + s(distance_coast) + s(pm25_ss_dust_frac) + grump + s(lon,lat),
-    # "IN" = diff_pm25 ~  s(srtm_diff05deg) + s(distance_coast) + s(pm25_ss_dust_frac) + grump + s(lon,lat),
-    # "NA" = diff_pm25 ~  s(srtm_diff05deg) + s(distance_coast) + s(pm25_ss_dust_frac) + grump + s(lon,lat),
-    # "EU" = diff_pm25 ~  s(srtm_diff05deg) + s(distance_coast) + s(pm25_ss_dust_frac) + grump + s(lon,lat),
-    # "SEA" = diff_pm25 ~  s(srtm_diff05deg) + s(distance_coast) + s(pm25_ss_dust_frac) + grump + s(lon,lat),
-    "JP" = diff_pm25 ~  s(srtm_diff05deg) + s(distance_coast) + s(pm25_ss_dust_frac) + grump + s(lon,lat),
-    "ZA" = diff_pm25 ~  s(srtm_diff05deg) + s(distance_coast) + s(pm25_ss_dust_frac) + grump + s(lon,lat)
+    # "CN" = diff_pm25 ~  s(pm25_prior, k=3) + grump + s(lon,lat) + factor(gadm1),
+    # "IN" = diff_pm25 ~  s(pm25_prior, k = 3) + s(pm25_ss_dust_frac) + s(lon,lat) + s(no2_prior),
+    # "NA" = diff_pm25 ~  s(srtm, k = 4) + s(pm25_prior, k = 3) + s(no2_prior) +  s(lon, lat),
+    # "SEA" = diff_pm25 ~  s(distance_coast) + s(pm25_prior, k=3),
+    # "EU" = diff_pm25 ~  s(pop) + s(distance_coast) + grump + s(lon, lat) + s(pm25_prior),
+    "JP" = diff_pm25 ~  s(pm25_prior) + s(lon,lat),
+    "ZA" = diff_pm25 ~ s(distance_coast) + s(pm25_prior)
   )
 
   pm25_preds <- pblapply(names(pm25_formulas), function(region){
+    print(region)
     adjust_region(
       obs_global = obs_pm25,
       region=region,
@@ -63,25 +70,23 @@ adjust_region <- function(obs_global, region, formula, predictors, poll, res){
   # Prepare data
   #####################
   data <- obs_global %>%
-    filter(stringr::str_detect(region==!!region)) %>%
+    filter(region==!!region) %>%
     cbind(sf::st_coordinates(.$geometry)) %>%
     dplyr::select_at(c("geometry","gadm0", all.vars(formula))) %>%
     drop_na()
-
-  mask_region <- predictors$gadm0 %in% unique(data$gadm0)
-  mask_region[mask_region==0] <- NA
 
   #####################
   # Train
   #####################
   model <- gam(formula, data=data)
+  summary(model)
 
   #####################
   # Quick diagnosis
   #####################
   sink(file = sprintf("results/gam_%s_%s_%s.txt", res, poll, region))
   summary(model)
-  sink()
+  sink(file=NULL)
   p <- predict(model, data, se.fit=T)
   data$predicted <- p$fit
   data$se <- p$se.fit
@@ -93,6 +98,9 @@ adjust_region <- function(obs_global, region, formula, predictors, poll, res){
   #####################
   # Predict
   #####################
+  mask_region <- predictors$gadm0 %in% unique(data$gadm0)
+  mask_region[mask_region==0] <- NA
+
   predfun <- function(model, data) {
     v <- predict.gam(model, data, se.fit=TRUE)
     cbind(p=as.vector(v$fit), se=as.vector(v$se.fit))

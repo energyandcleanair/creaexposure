@@ -24,4 +24,5 @@ source('adjust_global.R')
 message("2pt5_min")
 res <- "2pt5_min"
 pop <- data.pop(res=res)
+adjust_global(pop, res)
 
