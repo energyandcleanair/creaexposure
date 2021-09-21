@@ -137,21 +137,25 @@ data.basemap_no2 <- function(pop, res, use_cache=T){
   if(file.exists(f) && use_cache){
     terra::rast(f)
   }else{
-    f_no2 <- "no2_agg8.grd"
-    f_no2_wsg84 <- "no2_agg8_ugm3_wsg84.tif"
+    f_no2 <- "Global_LUR_NO2_2011_16b_2.tif"
+    f_no2_agg10 <- "Global_LUR_NO2_2011_16b_2_agg10.tif"
+    f_no2_wsg84 <- "no2_agg10_ugm3_wsg84.tif"
 
     if(!file.exists(creahelpers::get_concentration_path(f_no2_wsg84))){
-      no2_wsg84 <- terra::rast(creahelpers::get_concentration_path(f_no2)) %>%
-        terra::project("EPSG:4326") # Required for hia
-
+      no2 <- terra::rast(creahelpers::get_concentration_path(f_no2))
+      terra::NAflag(no2) <- 128
+      no2_agg10 <- terra::aggregate(no2, fact=10, cores=parallel::detectCores()-1)
+      terra::writeRaster(no2_agg10, creahelpers::get_concentration_path(f_no2_agg10),
+                         overwrite=T)
+      no2_wsg84 <- no2_agg10 %>% terra::project("epsg:4326") # Required for hia
       no2_wsg84 <- no2_wsg84 * 1.88 # ppb to µg/m3 !!!
-
       terra::writeRaster(no2_wsg84, creahelpers::get_concentration_path(f_no2_wsg84),
                          overwrite=T)
     }
+
     no2 <- terra::rast(creahelpers::get_concentration_path(f_no2_wsg84)) %>%
-      terra::resample(pop)
-    terra::writeRaster(no2, f)
+      terra::resample(pop) %>% terra::mask(pop)
+    terra::writeRaster(no2, f, overwrite=T)
     return(no2)
   }
 }

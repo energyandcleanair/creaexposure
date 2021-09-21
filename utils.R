@@ -30,3 +30,7 @@ utils.to_raster <- function(x){
     x
   }
 }
+
+utils.add_predictors <- function(obs, predictors){
+  cbind(obs, raster::extract(predictors, sf::st_as_sf(obs)))
+}
