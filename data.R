@@ -133,16 +133,19 @@ data.basemap_pm25_region <- function(region){
 
 data.basemap_no2 <- function(pop, res, use_cache=T){
 
-  f <- sprintf("cache/no2_%s.tif", res)
+  f <- sprintf("cache/no2_ugm3_%s.tif", res)
   if(file.exists(f) && use_cache){
     terra::rast(f)
   }else{
     f_no2 <- "no2_agg8.grd"
-    f_no2_wsg84 <- "no2_agg8_wsg84.tif"
+    f_no2_wsg84 <- "no2_agg8_ugm3_wsg84.tif"
 
     if(!file.exists(creahelpers::get_concentration_path(f_no2_wsg84))){
       no2_wsg84 <- terra::rast(creahelpers::get_concentration_path(f_no2)) %>%
         terra::project("EPSG:4326") # Required for hia
+
+      no2_wsg84 <- no2_wsg84 * 1.88 # ppb to µg/m3 !!!
+
       terra::writeRaster(no2_wsg84, creahelpers::get_concentration_path(f_no2_wsg84),
                          overwrite=T)
     }
@@ -183,6 +186,28 @@ data.pop <- function(res="30_sec", bb=NULL, mask=NULL){
   r
 }
 
+data.pop_ratio_log <- function(pop, res, use_cache=T){
+
+  f <- file.path("cache", paste0("pop_ratio_log_",res,".tif"))
+  if(!use_cache | !file.exists(f)){
+
+    r2010 <- terra::rast(creahelpers::get_population_path(
+      sprintf('gpw_v4_population_density_rev11_2010_%s.tif',res))) %>%
+      terra::resample(pop) %>% terra::mask(pop)
+
+    r2020 <- terra::rast(creahelpers::get_population_path(
+      sprintf('gpw_v4_population_density_rev11_2020_%s.tif',res))) %>%
+      terra::resample(pop) %>% terra::mask(pop)
+
+    r_ratio <- max(log(min(r2020/r2010,10)), -2)
+    names(r_ratio) <- "pop_ratio"
+    writeRaster(r_ratio, f, overwrite=T)
+  }else{
+    rast(f)
+  }
+}
+
+
 
 #' Build a raster stack of all potential predictors used for model fitting
 #'
@@ -196,11 +221,13 @@ data.predictors <- function(pop, res){
   no2.base <- data.basemap_no2(pop, res, use_cache=T)
 
   distance_coast <- data.distance_coast(pop, res, use_cache=T)
-  # distance_urban <- data.distance_urban(pop, res, saturation_km=100, use_cache=T)
+  distance_urban <- data.distance_urban(pop, res, use_cache=T)
   grump <- data.grump(pop, res, use_cache=T)
   gadm0 <- raster(data.gadm_raster(pop, res, level=0))
   gadm1 <- raster(data.gadm_raster(pop, res, level=1))
 
+  omi_diff <- data.omi_diff(pop, res)
+  pop_ratio_log <- data.pop_ratio_log(pop, res)
   srtm <- data.srtm(pop, res, use_cache=T)
   srtm_05deg <- utils.focal_mean(srtm, d_deg=0.5, pop=pop, res=res, use_cache=T)
   # srtm_1deg <- utils.focal_mean(srtm, d_deg=1, pop=pop, res=res, use_cache=T)
@@ -221,12 +248,15 @@ data.predictors <- function(pop, res){
     pm25_prior=pm25.base,
     no2_prior=no2.base,
     distance_coast=distance_coast,
+    distance_urban=distance_urban,
     grump=grump,
     pop=pop,
     lon=lon,
     lat=lat,
     gadm0=gadm0,
     gadm1=gadm1,
+    omi_diff=omi_diff,
+    pop_ratio_log=pop_ratio_log,
     srtm=srtm,
     srtm_05deg=srtm_05deg,
     # srtm_1deg=srtm_1deg,
@@ -295,6 +325,28 @@ data.lat <- function(pop, res, use_cache=T){
   }
 }
 
+data.omi_diff <- function(pop, res, year_i=2011, year_f=2019, use_cache=T){
+
+  f <- file.path("cache", sprintf("omi_diff_%d_%d_%s.tif",year_i, year_f, res))
+
+  if(!use_cache | !file.exists(f)){
+
+    omi_i <- terra::rast(creahelpers::get_concentration_path(sprintf("no2_omi_%d.tif", year_i))) %>%
+      terra::resample(pop) %>% terra::mask(pop)
+
+    omi_f <- terra::rast(creahelpers::get_concentration_path(sprintf("no2_omi_%d.tif", year_f))) %>%
+      terra::resample(pop) %>% terra::mask(pop)
+
+    omi_diff <- omi_f - omi_i
+    omi_diff <- omi_diff / 1E15 # Scaling a bit...
+    terra::writeRaster(omi_diff, f, overwrite=T)
+    return(omi_diff)
+  }else{
+    terra::rast(f)
+  }
+}
+
+
 data.srtm <- function(pop, res, use_cache=T){
 
   f <- file.path("cache", paste0("srtm_",res,".tif"))
@@ -355,117 +407,151 @@ data.srtm_mean <- function(pop, res, d_deg=1, use_cache=T){
 }
 
 
+
+#' Download roads from SEDAC
+#' https://sedac.ciesin.columbia.edu/data/set/groads-global-roads-open-access-v1/data-download
 #'
-#' #' Download roads from SEDAC
-#' #' https://sedac.ciesin.columbia.edu/data/set/groads-global-roads-open-access-v1/data-download
-#' #'
-#' #' @param use_cache
-#' #'
-#' #' @return
-#' #' @export
-#' #'
-#' #' @examples
-#' data.road_density_groads <- function(res, pop, use_cache=T){
+#' @param use_cache
 #'
-#'   f <- file.path("cache", paste0("road_density_groads_",res,".tif"))
+#' @return
+#' @export
 #'
-#'   if(!use_cache | !file.exists(f)){
-#'
-#'     res_rasterizing <- "2pt5_min"
-#'     pop_rasterizing <- data.pop(res=res_rasterizing)
-#'
-#'
-#'     roads <- sf::read_sf(file.path(creahelpers::get_gis_dir(), "roads",
-#'                                    "gROADS_v1.gdb"))
-#'
-#'     # roads <- roads %>% as("Spatial")
-#'
-#'     # r <- creahelpers::rasterize_lines(lines=roads,
-#'     #                                   grid=raster(pop_rasterizing))
-#'
-#'     lines <- roads
-#'     grid <- pop
-#'     raster::crs(lines) <- raster::crs(raster::raster(pop))
-#'
-#'     # Cut lines along grid cells
-#'     print("Polygonizing...")
-#'     rs <- grid
-#'     rs[] <- 1:ncell(rs)
-#'     names(rs) <- "i_cell"
-#'     rsp <- terra::as.polygons(rs)
-#'     rsp <- as(rsp, "Spatial")
-#'     print("Done")
-#'
-#'
-#'     # Add temporary feature id for grouping
-#'     lines$feature_id_tmp <- 1:nrow(lines)
-#'
-#'     print("Cutting along grid...")
-#'     # sf much less memory intensive than raster::intersect
-#'     # and faster
-#'
-#'     # Chunking it to avoid rgeos_binpredfunc_prepared: maximum returned dense matrix size exceeded
-#'     cutting_successful <- F
-#'     chunk_size <- 1E10
-#'     while(!cutting_successful){
-#'       tryCatch({
-#'         rsp$chunk <- rsp$i_cell %/% chunk_size
-#'         emission.sf <- sf::st_as_sf(lines)
-#'         rp <- pbapply::pblapply(split(sf::st_as_sf(rsp), rsp$chunk),
-#'                                 function(rsp_chunk){
-#'                                   sf::st_intersection(emission.sf,rsp_chunk)
-#'                                 }) %>%
-#'           do.call("bind_rows",.)
-#'         cutting_successful <- T
-#'       }, error=function(e){
-#'         if("size exceeded" %in% as.character(e)){
-#'           chunk_size <- chunk_size / 100
-#'           warning("Cutting failed: ", e, "\n Trying with smaller chunk size", )
-#'         }else{
-#'           stop(e)
-#'         }
-#'       })
-#'     }
-#'
-#'     print("Done")
-#'
-#'     print("Calculating length...")
-#'     rp$length <- sf::st_length(rp, byid=TRUE)
-#'     print("Done")
-#'
-#'     # # Weighting accordingly
-#'     # print("Weighting by length...")
-#'     # rp <- rp %>%
-#'     #   group_by(feature_id_tmp) %>%
-#'     #   do(mutate(., emission=.$emission * length / sum(.$length)))
-#'     # print("Done")
-#'
-#'     print("Rasterizing...")
-#'     rp.sum <- rp %>%
-#'       group_by(i_cell=as.integer(i_cell)) %>%
-#'       summarise(length=sum(length, na.rm=T))
-#'
-#'     # Print into raster directly!
-#'     cells_x <- rep(0,ncell(rs))
-#'     cells_x[rp.sum$i_cell] <- rp.sum$length
-#'     grid_result <- grid
-#'     grid_result[] <- cells_x
-#'
-#'
-#'
-#'
-#'
-#'
-#'
-#'
-#'     writeRaster(r, f)
-#'     return(r)
-#'   }else{
-#'     raster(f)
-#'   }
-#'
-#'
-#' }
+#' @examples
+data.road_density_groads <- function(res, pop, use_cache=T){
+
+  f <- file.path("cache", paste0("road_density_groads_",res,".tif"))
+
+  if(!use_cache | !file.exists(f)){
+
+    res_rasterizing <- "2pt5_min"
+    pop_rasterizing <- data.pop(res=res_rasterizing)
+
+    # Using this approach
+    # https://gis.stackexchange.com/questions/119993/convert-line-shapefile-to-raster-value-total-length-of-lines-within-cell
+    library(rgdal)
+    library(raster)
+    library(rgeos)
+    library(tictoc)
+    roads <- readOGR(file.path(creahelpers::get_gis_dir(), "roads",
+                               "gROADS_v1.gdb"))
+
+    # roads_utm <- spTransform(roads, CRS("+init=epsg:21037"))
+    grid <- raster(raster(pop))
+    icells <- which(!is.na(values(raster(pop))))
+
+    tic()
+    lengths <- sapply(icells[1:100], function(i) {
+
+      if(is.na(pop[i])){
+        return(NA)
+      }
+
+      tmp_rst <- grid
+      tmp_rst[i] <- 1
+      tmp_shp <- rasterToPolygons(tmp_rst)
+
+      if (gIntersects(roads, tmp_shp)) {
+        roads_crp <- crop(roads, tmp_shp)
+        roads_crp_length <- gLength(roads_crp)
+        return(roads_crp_length)
+      } else {
+        return(0)
+      }
+    })
+    toc()
+
+    r <- raster::rasteri
+
+    # roads <- sf::read_sf(file.path(creahelpers::get_gis_dir(), "roads",
+    # "gROADS_v1.gdb"))
+    # roads <- roads %>% as("Spatial")
+
+    # r <- creahelpers::rasterize_lines(lines=roads,
+    #                                   grid=raster(pop_rasterizing))
+
+    lines <- roads
+    grid <- pop
+    raster::crs(lines) <- raster::crs(raster::raster(pop))
+
+    # Cut lines along grid cells
+    print("Polygonizing...")
+    rs <- grid
+    rs[] <- 1:ncell(rs)
+    names(rs) <- "i_cell"
+    rsp <- terra::as.polygons(rs)
+    rsp <- as(rsp, "Spatial")
+    print("Done")
+
+
+    # Add temporary feature id for grouping
+    lines$feature_id_tmp <- 1:nrow(lines)
+
+    print("Cutting along grid...")
+    # sf much less memory intensive than raster::intersect
+    # and faster
+
+    # Chunking it to avoid rgeos_binpredfunc_prepared: maximum returned dense matrix size exceeded
+    cutting_successful <- F
+    chunk_size <- 1E10
+    while(!cutting_successful){
+      tryCatch({
+        rsp$chunk <- rsp$i_cell %/% chunk_size
+        emission.sf <- sf::st_as_sf(lines)
+        rp <- pbapply::pblapply(split(sf::st_as_sf(rsp), rsp$chunk),
+                                function(rsp_chunk){
+                                  sf::st_intersection(emission.sf,rsp_chunk)
+                                }) %>%
+          do.call("bind_rows",.)
+        cutting_successful <- T
+      }, error=function(e){
+        if("size exceeded" %in% as.character(e)){
+          chunk_size <- chunk_size / 100
+          warning("Cutting failed: ", e, "\n Trying with smaller chunk size", )
+        }else{
+          stop(e)
+        }
+      })
+    }
+
+    print("Done")
+
+    print("Calculating length...")
+    rp$length <- sf::st_length(rp, byid=TRUE)
+    print("Done")
+
+    # # Weighting accordingly
+    # print("Weighting by length...")
+    # rp <- rp %>%
+    #   group_by(feature_id_tmp) %>%
+    #   do(mutate(., emission=.$emission * length / sum(.$length)))
+    # print("Done")
+
+    print("Rasterizing...")
+    rp.sum <- rp %>%
+      group_by(i_cell=as.integer(i_cell)) %>%
+      summarise(length=sum(length, na.rm=T))
+
+    # Print into raster directly!
+    cells_x <- rep(0,ncell(rs))
+    cells_x[rp.sum$i_cell] <- rp.sum$length
+    grid_result <- grid
+    grid_result[] <- cells_x
+
+
+
+
+
+
+
+
+    writeRaster(r, f)
+    return(r)
+  }else{
+    raster(f)
+  }
+
+
+}
 
 
 
@@ -504,27 +590,34 @@ data.road_density_grip <- function(res, pop, use_cache=T){
 }
 
 
-data.distance_urban <- function(pop, res, saturation_km=100, use_cache=T){
+data.distance_urban <- function(pop, res, use_cache=T){
 
   f <- file.path("cache", paste0("distance_urban_",res,".tif"))
 
   if(!use_cache | !file.exists(f)){
-    grump <- data.grump(pop, res)
-    sea_level <- 0
-    rural_level <- 1
-    urban_level <- 2
 
-    # Avoid computing distance in sea
-    grump[grump==sea_level] <- -1
-    grump[grump==rural_level] <- NA
-    dist <- terra::distance(grump)
-    dist[is.na(pop)] <- NA
-    dist[dist==-1] <- NA
+    # Too slow
+    # grump <- data.grump(pop, res)
+    # sea_level <- 0
+    # rural_level <- 1
+    # urban_level <- 2
+    #
+    # # Avoid computing distance in sea
+    # grump[grump==sea_level] <- -1
+    # grump[grump==rural_level] <- NA
+    # dist <- terra::distance(grump)
+    # dist[is.na(pop)] <- NA
+    # dist[dist==-1] <- NA
+    # raster::writeRaster(dist, f, overwrite=T)
+
+    # We generated it using QGIS
+    dist <- terra::rast(creahelpers::get_landcover_path("grumpv1/distance_urban_2pt5_min.tif")) %>%
+      terra::resample(pop) %>%
+      terra::mask(pop)
     raster::writeRaster(dist, f, overwrite=T)
   }else{
     dist <- terra::rast(f)
   }
-  dist[dist>saturation_km*1000] <- saturation_km*1000
   return(dist)
 }
 
