@@ -40,11 +40,11 @@ data.get_obs <- function(polls=c("pm25","no2"), year=2020, use_cache=T){
              source="em",
              type=PM2.5_inferred_basis,
              value=pm25) %>%
-      sf::st_as_sf(coords=c("Lon","Lat")) %>%
+      sf::st_as_sf(coords=c("Lon","Lat"), crs=4326) %>%
       select(location_id, country, poll, unit, source, type, value, geometry) %>%
       as.data.frame()
 
-    obs <- bind_rows(obs, obs_ph)
+    obs <- bind_rows(tibble(obs), tibble(obs_ph))
 
 
     # NO2: 1 ppb = 1.88 µg/m3
