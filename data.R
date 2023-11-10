@@ -64,52 +64,66 @@ data.get_obs <- function(polls=c("pm25","no2"), year=2020, use_cache=T){
   }
 }
 
-data.basemap_pm25 <- function(pop, res, use_cache=T){
+data.basemap_pm25 <- function(pop, res, year=2020, use_cache=T){
 
-  f <- sprintf("cache/pm25_%s.tif", res)
+
+  basemap_years <- seq(2018, 2021)
+  basemap_year <- max(basemap_years[basemap_years<=year])
+
+  f <- sprintf("cache/pm25_%s_%s.tif", basemap_year, res)
   if(file.exists(f) && use_cache){
     terra::rast(f)
   }else{
-    pm25_china <- data.basemap_pm25_region("China") %>% terra::resample(pop) %>% raster()
-    pm25_eur <- data.basemap_pm25_region("Europe") %>% terra::resample(pop) %>% raster()
-    pm25_usa <- data.basemap_pm25_region("NorthAmerica") %>% terra::resample(pop) %>% raster()
-    pm25_global <- data.basemap_pm25_region("Global") %>% raster() %>%
-      raster::resample(raster(pop)) #memory issue with terra
+    # pm25_china <- data.basemap_pm25_region("China", year=basemap_year) %>% terra::resample(pop, method='bilinear')
+    # pm25_eur <- data.basemap_pm25_region("Europe", year=basemap_year) %>% terra::resample(pop, method='bilinear')
+    # pm25_usa <- data.basemap_pm25_region("NorthAmerica", year=basemap_year) %>% terra::resample(pop, method='bilinear')
+    # pm25_asia <- data.basemap_pm25_region("Asia", year=basemap_year) %>% terra::resample(pop, method='bilinear')
+    pm25_global <- data.basemap_pm25_region("Global", year=basemap_year) %>% terra::resample(pop, method='bilinear')
 
-    pm25_stack <- stack(pm25_china, pm25_eur, pm25_usa, pm25_global)
-
-    pm25 <- pm25_stack %>% raster::calc(
-      fun=function(x, ...){
-        local <- sum(x[1], x[2], x[3], na.rm=T)
-        if(local==0) x[4] else local
-      }
-    )
-
-    raster::writeRaster(pm25, f, overwrite=T)
-    return(terra::rast(pm25))
+    # pm25_stack <- terra::sprc(pm25_china, pm25_eur, pm25_usa, pm25_asia)
+    # pm25 <- terra::merge(pm25_stack, first=TRUE, filename=f, overwrite=T)
+    pm25 <- pm25_global
+    return(pm25)
   }
 }
 
-data.basemap_pm25_region <- function(region){
+data.basemap_pm25_region <- function(region, year=2020){
 
-  region_fs <- list(
-    "NorthAmerica" = "V4NA03_PM25_NA_201801_201812-RH35.nc",
-    "Europe" = "V4EU03_PM25_EU_201801_201812-RH35.nc",
-    "China" = "V4CH03_PM25_CHi_201801_201812-RH35.nc",
-    "Global" = "ACAG_PM25_GWR_V4GL03_201801_201812_0p01.tif"
-  )
+  # region_fs <- list(
+  #   `2018` = list(
+  #     "NorthAmerica" = "V4NA03_PM25_NA_201801_201812-RH35.nc",
+  #     "Europe" = "V4EU03_PM25_EU_201801_201812-RH35.nc",
+  #     "China" = "V4CH03_PM25_CHi_201801_201812-RH35.nc",
+  #     "Global" = "ACAG_PM25_GWR_V4GL03_201801_201812_0p01.tif"
+  #   ),
+  #   `2020` = list(
+  #     "Asia" = "V5GL02.HybridPM25.Asia.202001-202012.nc",
+  #     "Europe" = "V5GL02.HybridPM25.Europe.202001-202012.nc",
+  #     "Global" = "V5GL02.HybridPM25.Global.202001-202012.nc",
+  #     "China" = "V5GL02.HybridPM25.China.202001-202012.nc",
+  #     "NorthAmerica" = "V5GL02.HybridPM25.NorthAmerica.202001-202012.nc"
+  #   )
+  # )
+  #
+  # if(!year %in% names(region_fs)){
+  #   stop("Year should be among ", paste(names(region_fs), collapse=", "))
+  # }
+  #
+  # if(!region %in% names(region_fs[[as.character(year)]])){
+  #   stop("Region should be among ", paste(names(region_fs[[as.character(year)]]), collapse=", "))
+  # }
 
-  if(!region %in% names(region_fs)){
-    stop("Region should be in ", paste(fs, collapse=", "))
-  }
 
-  f_pm25_nc <- region_fs[[region]]
+  # f_pm25_nc <- region_fs[[as.character(year)]][[region]]
+
+  if(region != "Global") stop("Now we only use Global from now on")
+  f_pm25_nc <- glue("V5GL03.HybridPM25.Global.{year}01-{year}12.nc")
   f_pm25_tif <- gsub("\\.nc","\\.tif", f_pm25_nc)
 
   nc_to_tif <- function(f_pm25_nc, f_pm25_tif){
     pm25.base <- raster::raster(creahelpers::get_concentration_path(f_pm25_nc))
 
-    if(region=="Global"){
+    if(region=="Global" & year==2018){
       # For some reason the Global dataset is flipped
       pm25.base <- pm25.base %>%
         raster::t() %>% # nc dimensions aren't in raster expected order I suppose
@@ -219,33 +233,33 @@ data.pop_ratio_log <- function(pop, res, use_cache=T){
 #' @export
 #'
 #' @examples
-data.predictors <- function(pop, res){
+data.predictors <- function(pop, res, year, use_cache=T){
 
-  pm25.base <- data.basemap_pm25(pop, res, use_cache=T)
-  no2.base <- data.basemap_no2(pop, res, use_cache=T)
+  pm25.base <- data.basemap_pm25(pop, res, year=year, use_cache=use_cache)
+  no2.base <- data.basemap_no2(pop, res, use_cache=use_cache)
 
-  distance_coast <- data.distance_coast(pop, res, use_cache=T)
-  distance_urban <- data.distance_urban(pop, res, use_cache=T)
-  grump <- data.grump(pop, res, use_cache=T)
-  gadm0 <- raster(data.gadm_raster(pop, res, level=0))
-  gadm1 <- raster(data.gadm_raster(pop, res, level=1))
+  distance_coast <- data.distance_coast(pop, res, use_cache=use_cache)
+  distance_urban <- data.distance_urban(pop, res, use_cache=use_cache)
+  grump <- data.grump(pop, res, use_cache=use_cache)
+  gadm0 <- raster(data.gadm_raster(pop, res, level=0, use_cache=use_cache))
+  gadm1 <- raster(data.gadm_raster(pop, res, level=1, use_cache=use_cache))
 
-  omi_diff <- data.omi_diff(pop, res)
-  pop_ratio_log <- data.pop_ratio_log(pop, res)
-  srtm <- data.srtm(pop, res, use_cache=T)
-  srtm_05deg <- utils.focal_mean(srtm, d_deg=0.5, pop=pop, res=res, use_cache=T)
-  # srtm_1deg <- utils.focal_mean(srtm, d_deg=1, pop=pop, res=res, use_cache=T)
+  omi_diff <- data.omi_diff(pop, res, use_cache=use_cache)
+  pop_ratio_log <- data.pop_ratio_log(pop, res, use_cache=use_cache)
+  srtm <- data.srtm(pop, res, use_cache=use_cache)
+  srtm_05deg <- utils.focal_mean(srtm, d_deg=0.5, pop=pop, res=res, use_cache=use_cache)
+  # srtm_1deg <- utils.focal_mean(srtm, d_deg=1, pop=pop, res=res, use_cache=use_cache)
 
   srtm_diff05deg <- srtm -srtm_05deg
   # srtm_diff1deg <- srtm -srtm_1deg
 
-  # srtm_1deg <- utils.focal_mean(srtm, d_deg=1, res=res, use_cache=T)
-  # srtm_2deg <- utils.focal_mean(srtm, d_deg=2, res=res, use_cache=T)
+  # srtm_1deg <- utils.focal_mean(srtm, d_deg=1, res=res, use_cache=use_cache)
+  # srtm_2deg <- utils.focal_mean(srtm, d_deg=2, res=res, use_cache=use_cache)
 
-  pop_05deg <- utils.focal_mean(pop, d_deg=0.5, pop=pop, res=res, use_cache=T)
-  pm25_ss_dust_frac <- data.pm25_ss_dust_frac(pop, res)
-  lon <- data.lon(pop, res)
-  lat <- data.lat(pop, res)
+  pop_05deg <- utils.focal_mean(pop, d_deg=0.5, pop=pop, res=res, use_cache=use_cache)
+  pm25_ss_dust_frac <- data.pm25_ss_dust_frac(pop, res, use_cache=use_cache)
+  lon <- data.lon(pop, res, use_cache=use_cache)
+  lat <- data.lat(pop, res, use_cache=use_cache)
 
   # Not all predictors will be used but putting them together nonetheless
   predictors <- list(
@@ -272,7 +286,6 @@ data.predictors <- function(pop, res){
 
   #rs: raster stack
   predictors <- lapply(predictors, utils.to_raster) %>% raster::stack()
-  names(predictors) <- names(predictors)
 
   # Adding surrogate variables
   # rs_predictors$distance_urban_inv <- 1/rs_predictors$distance_urban
@@ -290,13 +303,13 @@ data.grump <- function(pop, res, use_cache=T){
   if(!use_cache | !file.exists(f)){
     # https://sedac.ciesin.columbia.edu/data/collection/grump-v1
     grump <- terra::rast(creahelpers::get_population_path('glurextents.bil'))
-    n_aggregate <- floor(res(pop) / res(grump))
+    n_aggregate <- min(floor(res(pop) / res(grump)))
     if(n_aggregate>1){
       # We aggregate first to avoid memory issues
       grump <- grump %>% terra::aggregate(fact=n_aggregate, fun="modal")
     }
-    grump.res <- grump %>% terra::resample(pop, method="near")
-    terra::writeRaster(grump.res, f, overwrite=T)
+    grump <- grump %>% terra::resample(pop, method="near")
+    terra::writeRaster(grump, f, overwrite=T)
     return(grump)
   }else{
     terra::rast(f)
@@ -638,9 +651,10 @@ data.gadm_raster <- function(pop, res, level, use_cache=T){
     #   rename_at(gid_level, function(x)"gid") %>%
     #   mutate(gid=as.numeric(factor(gid)))
 
-    r <- terra::rasterize(terra::vect(g), pop,
+    r <- terra::rasterize(terra::vect(g),
+                          pop,
                           field=gid_level,
-                          fun=first)
+                          fun="min")
 
     # Extending a bit into water to be sure
     # we're not missing coastal cities
@@ -822,8 +836,8 @@ data.pm25_ss_dust_frac <- function(pop, res, use_cache=T){
   if(file.exists(f) && use_cache){
     terra::rast(f)
   }else{
-    pm25_w_ssd <- raster(creahelpers::get_concentration_path("ACAG_PM25_GWR_V4GL03_201801_201812_0p01.tif"))
-    pm25_wo_ssd <- raster(creahelpers::get_concentration_path("ACAG_PM25_noDUSTnoSEASALT_GWR_V4GL03_201801_201812_0p01.tif"))
+    pm25_w_ssd <- raster(creahelpers::get_concentration_path("ACAG_PM25_GWR_V4GL03_201901_201912_0p01.tif"))
+    pm25_wo_ssd <- raster(creahelpers::get_concentration_path("ACAG_PM25_noDUSTnoSEASALT_GWR_V4GL03_201901_201912_0p01.tif"))
     ss_dust_frac <- (pm25_w_ssd - pm25_wo_ssd)/ pm25_w_ssd
     ss_dust_frac <- ss_dust_frac %>% raster::resample(raster(pop))
     raster::writeRaster(ss_dust_frac, f, overwrite=T)
