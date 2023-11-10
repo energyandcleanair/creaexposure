@@ -1,11 +1,17 @@
-adjust_global <- function(pop, res, poll=c("pm25","no2"), suffix="", selected_regions=NULL){
+adjust_global <- function(pop,
+                          res,
+                          poll=c("pm25","no2"),
+                          suffix="",
+                          selected_regions=NULL,
+                          year=2022,
+                          use_cache=T){
 
   ###################################################
   # Prepare data
   ###################################################
   # Get observations and predictors and these points
-  obs <- data.get_obs(year=2019)
-  predictors <- data.predictors(pop, res)
+  obs <- data.get_obs(year=year, use_cache = use_cache)
+  predictors <- data.predictors(pop, res, year=year, use_cache = use_cache)
   obs <- utils.add_predictors(obs, predictors)
 
   # obs$gadm0 <- as.factor(obs$gadm0)
@@ -70,7 +76,7 @@ adjust_global <- function(pop, res, poll=c("pm25","no2"), suffix="", selected_re
     # We've manually checked smooth terms for s(pm25_prior) for every fitting and checked
     # it looked alright (e.g. low edf, consistent trend)
     pm25_formulas <- list(
-      "CN" = diff_pm25 ~  s(pm25_prior, k=3) + s(urban_distance, k=3) + s(lon,lat) + gadm1,
+      "CN" = diff_pm25 ~  s(pm25_prior, k=3) + s(distance_urban, k=3) + s(lon,lat) + gadm1,
       "IN" = diff_pm25 ~  s(pm25_prior, k = 3) + s(pm25_ss_dust_frac) + s(lon,lat) + s(no2_prior),
       "NA" = diff_pm25 ~  s(srtm, k = 4) + s(pm25_prior, k = 3) + s(no2_prior) +  s(lon, lat),
       "SEA" = diff_pm25 ~  s(pop_ratio_log, k=3),
@@ -87,8 +93,8 @@ adjust_global <- function(pop, res, poll=c("pm25","no2"), suffix="", selected_re
     pm25_preds <- pblapply(names(regions), function(region){
       print(region)
 
-      f <- sprintf("cache/pm25_pred_%s_%s%s.tif", res, region, suffix)
-      if(file.exists(f)){
+      f <- sprintf("cache/pm25_pred_%s_%s_%s%s.tif", res, region, year, suffix)
+      if(use_cache & file.exists(f)){
         raster::stack(f) %>% `names<-`(c("predicted", "error"))
       }
       else{
@@ -100,7 +106,7 @@ adjust_global <- function(pop, res, poll=c("pm25","no2"), suffix="", selected_re
             predictors=predictors,
             poll="pm25",
             res=res)
-          writeRaster(region_preds, f)
+          writeRaster(region_preds, f, overwrite=T)
           names(region_preds)<-c("predicted", "error")
           region_preds
         }, error=function(e){
@@ -113,20 +119,21 @@ adjust_global <- function(pop, res, poll=c("pm25","no2"), suffix="", selected_re
 
     pm25_diff <- combine_preds(pm25_preds, error_relative_threshold=1.645)
 
-    mask <- predictors$distance_urban < quantile(obs$distance_urban, 0.95, na.rm=T) # 0.29 deg
+    mask <- predictors$distance_urban < quantile(obs$distance_urban, 0.95, na.rm=T) # 0.25 deg
     mask[mask==0] <- NA
     pm25_diff <- pm25_diff %>% mask(mask) %>% mask(utils.to_raster(pop))
 
-    writeRaster(pm25_diff, sprintf("results/pm25_adjustment_%s%s.tif",res,suffix),
+    writeRaster(pm25_diff, sprintf("results/pm25_adjustment_%s_%s%s.tif", res, year, suffix),
                 overwrite=T)
 
     pm25 <- raster::calc(stack(c(predictors$pm25_prior, pm25_diff)), sum, na.rm=T) %>%
       mask(utils.to_raster(pop))
-    writeRaster(pm25, sprintf("results/pm25_adjusted_%s%s.tif",res,suffix),
+
+    writeRaster(pm25, sprintf("results/pm25_adjusted_%s_%s%s.tif",res, year, suffix),
                 overwrite=T)
 
     pm25_noss <- pm25 * (1-predictors$pm25_ss_dust_frac) # Remove sea salt & dust contribution
-    writeRaster(pm25_noss, sprintf("results/pm25_adjusted_no_ss_dust_%s%s.tif",res,suffix),
+    writeRaster(pm25_noss, sprintf("results/pm25_adjusted_no_ss_dust_%s_%s%s.tif",res, year, suffix),
                 overwrite=T)
   }
 
@@ -160,7 +167,7 @@ adjust_global <- function(pop, res, poll=c("pm25","no2"), suffix="", selected_re
       "CL" = diff_no2 ~ s(distance_urban, k = 3)
     )
 
-    no2_preds <- pblapply(names(no2_formulas), function(region){
+    no2_preds <- pblapply(names(regions), function(region){
       print(region)
 
       f <- sprintf("cache/no2_pred_%s_%s%s.tif", res, region, suffix)
@@ -190,11 +197,11 @@ adjust_global <- function(pop, res, poll=c("pm25","no2"), suffix="", selected_re
     mask <- predictors$distance_urban < quantile(obs$distance_urban, 0.95, na.rm=T) # 0.29 deg
     mask[mask==0] <- NA
     no2_diff <- no2_diff %>% mask(mask) %>% mask(utils.to_raster(pop))
-    writeRaster(no2_diff, sprintf("results/no2_adjustment_%s%s.tif", res, suffix),
+    writeRaster(no2_diff, sprintf("results/no2_adjustment_%s_%s%s.tif", res, year, suffix),
                 overwrite=T)
 
     no2 <- raster::calc(stack(c(predictors$no2_prior,no2_diff)), sum, na.rm=T) %>% mask(utils.to_raster(pop))
-    writeRaster(no2, sprintf("results/no2_adjusted_%s%s.tif", res, suffix),
+    writeRaster(no2, sprintf("results/no2_adjusted_%s_%s%s.tif", res, year, suffix),
                 overwrite=T)
   }
 }
@@ -266,7 +273,7 @@ combine_preds <- function(preds, error_relative_threshold){
 
   # We assume there is no overlap
   pblapply(preds, function(pred){
-    pred$valid <- abs(pred$predicted) > pred$error * error_relative_threshold
+    pred$valid <- abs(pred$predicted) > abs(pred$error) * error_relative_threshold
     pred$predicted[pred$valid==0]<-NA
     pred$predicted
   }) %>%
