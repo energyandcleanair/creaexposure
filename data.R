@@ -82,7 +82,9 @@ data.basemap_pm25 <- function(pop, res, year=2020, use_cache=T){
 
     # pm25_stack <- terra::sprc(pm25_china, pm25_eur, pm25_usa, pm25_asia)
     # pm25 <- terra::merge(pm25_stack, first=TRUE, filename=f, overwrite=T)
+
     pm25 <- pm25_global
+    terra::writeRaster(pm25, filename = f, overwrite = T)
     return(pm25)
   }
 }
