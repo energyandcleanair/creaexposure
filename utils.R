@@ -1,7 +1,7 @@
-utils.focal_mean <- function(r, d_deg, pop, res, use_cache=T){
+utils.focal_mean <- function(r, d_deg, pop, res, use_cache=T, suffix=""){
 
   name <- sprintf("%s_%sdeg", names(r), d_deg)
-  f <- file.path("cache", sprintf("%s_%s.tif", name, res))
+  f <- file.path("cache", sprintf("%s_%s%s.tif", name, res, suffix))
 
   if(!use_cache | !file.exists(f)){
 

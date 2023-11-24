@@ -64,13 +64,82 @@ data.get_obs <- function(polls=c("pm25","no2"), year=2020, use_cache=T){
   }
 }
 
-data.basemap_pm25 <- function(pop, res, year=2020, use_cache=T){
+#' Build a raster stack of all potential predictors used for model fitting
+#'
+#' @return
+#' @export
+#'
+#' @examples
+data.predictors <- function(pop, res, year, use_cache=T, suffix=""){
+
+  pm25.base <- data.basemap_pm25(pop, res, year=year, use_cache=use_cache, suffix=suffix)
+  no2.base <- data.basemap_no2(pop, res, use_cache=use_cache, suffix=suffix)
+
+  distance_coast <- data.distance_coast(pop, res, use_cache=use_cache, suffix=suffix)
+  distance_urban <- data.distance_urban(pop, res, use_cache=use_cache, suffix=suffix)
+  grump <- data.grump(pop, res, use_cache=use_cache, suffix=suffix)
+  gadm0 <- raster(data.gadm_raster(pop, res, level=0, use_cache=use_cache, suffix=suffix))
+  gadm1 <- raster(data.gadm_raster(pop, res, level=1, use_cache=use_cache, suffix=suffix))
+
+  omi_diff <- data.omi_diff(pop, res, use_cache=use_cache, suffix=suffix)
+  pop_ratio_log <- data.pop_ratio_log(pop, res, use_cache=use_cache, suffix=suffix)
+  srtm <- data.srtm(pop, res, use_cache=use_cache, suffix=suffix)
+  srtm_05deg <- utils.focal_mean(srtm, d_deg=0.5, pop=pop, res=res, use_cache=use_cache, suffix=suffix)
+  # srtm_1deg <- utils.focal_mean(srtm, d_deg=1, pop=pop, res=res, use_cache=use_cache)
+
+  srtm_diff05deg <- srtm -srtm_05deg
+  # srtm_diff1deg <- srtm -srtm_1deg
+
+  # srtm_1deg <- utils.focal_mean(srtm, d_deg=1, res=res, use_cache=use_cache)
+  # srtm_2deg <- utils.focal_mean(srtm, d_deg=2, res=res, use_cache=use_cache)
+
+  pop_05deg <- utils.focal_mean(pop, d_deg=0.5, pop=pop, res=res, use_cache=use_cache, suffix=suffix)
+  pm25_ss_dust_frac <- data.pm25_ss_dust_frac(pop, res, use_cache=use_cache, suffix=suffix)
+  lon <- data.lon(pop, res, use_cache=use_cache, suffix=suffix)
+  lat <- data.lat(pop, res, use_cache=use_cache, suffix=suffix)
+
+  # Not all predictors will be used but putting them together nonetheless
+  predictors <- list(
+    pm25_prior=pm25.base,
+    no2_prior=no2.base,
+    distance_coast=distance_coast,
+    distance_urban=distance_urban,
+    grump=grump,
+    pop=pop,
+    lon=lon,
+    lat=lat,
+    gadm0=gadm0,
+    gadm1=gadm1,
+    omi_diff=omi_diff,
+    pop_ratio_log=pop_ratio_log,
+    srtm=srtm,
+    srtm_05deg=srtm_05deg,
+    # srtm_1deg=srtm_1deg,
+    srtm_diff05deg=srtm_diff05deg,
+    # srtm_diff1deg=srtm_diff1deg,
+    pop_05deg=pop_05deg,
+    pm25_ss_dust_frac=pm25_ss_dust_frac
+  )
+
+  #rs: raster stack
+  predictors <- lapply(predictors, utils.to_raster) %>% raster::stack()
+
+  # Adding surrogate variables
+  # rs_predictors$distance_urban_inv <- 1/rs_predictors$distance_urban
+  # rs_predictors$distance_urban_inv[is.infinite(rs_predictors$distance_urban_inv)] <- 1/400
+  # rs_predictors$distance_urban_inv[rs_predictors$distance_urban_inv>1/400] <- 1/400
+  # rs_predictors$road_density_log <- log(rs_predictors$road_density + 1)
+  return(predictors)
+}
+
+
+data.basemap_pm25 <- function(pop, res, year=2020, use_cache=T, suffix=""){
 
 
   basemap_years <- seq(2018, 2021)
   basemap_year <- max(basemap_years[basemap_years<=year])
 
-  f <- sprintf("cache/pm25_%s_%s.tif", basemap_year, res)
+  f <- sprintf("cache/pm25_%s_%s%s.tif", basemap_year, res, suffix)
   if(file.exists(f) && use_cache){
     terra::rast(f)
   }else{
@@ -147,9 +216,9 @@ data.basemap_pm25_region <- function(region, year=2020){
 }
 
 
-data.basemap_no2 <- function(pop, res, use_cache=T){
+data.basemap_no2 <- function(pop, res, use_cache=T, suffix=""){
 
-  f <- sprintf("cache/no2_ugm3_%s.tif", res)
+  f <- sprintf("cache/no2_ugm3_%s%s.tif", res, suffix)
   if(file.exists(f) && use_cache){
     terra::rast(f)
   }else{
@@ -206,9 +275,9 @@ data.pop <- function(res="30_sec", bb=NULL, mask=NULL){
   r
 }
 
-data.pop_ratio_log <- function(pop, res, use_cache=T){
+data.pop_ratio_log <- function(pop, res, use_cache=T, suffix=""){
 
-  f <- file.path("cache", paste0("pop_ratio_log_",res,".tif"))
+  f <- file.path("cache", paste0("pop_ratio_log_",res,suffix,".tif"))
   if(!use_cache | !file.exists(f)){
 
     r2010 <- terra::rast(creahelpers::get_population_path(
@@ -229,78 +298,12 @@ data.pop_ratio_log <- function(pop, res, use_cache=T){
 
 
 
-#' Build a raster stack of all potential predictors used for model fitting
-#'
-#' @return
-#' @export
-#'
-#' @examples
-data.predictors <- function(pop, res, year, use_cache=T){
-
-  pm25.base <- data.basemap_pm25(pop, res, year=year, use_cache=use_cache)
-  no2.base <- data.basemap_no2(pop, res, use_cache=use_cache)
-
-  distance_coast <- data.distance_coast(pop, res, use_cache=use_cache)
-  distance_urban <- data.distance_urban(pop, res, use_cache=use_cache)
-  grump <- data.grump(pop, res, use_cache=use_cache)
-  gadm0 <- raster(data.gadm_raster(pop, res, level=0, use_cache=use_cache))
-  gadm1 <- raster(data.gadm_raster(pop, res, level=1, use_cache=use_cache))
-
-  omi_diff <- data.omi_diff(pop, res, use_cache=use_cache)
-  pop_ratio_log <- data.pop_ratio_log(pop, res, use_cache=use_cache)
-  srtm <- data.srtm(pop, res, use_cache=use_cache)
-  srtm_05deg <- utils.focal_mean(srtm, d_deg=0.5, pop=pop, res=res, use_cache=use_cache)
-  # srtm_1deg <- utils.focal_mean(srtm, d_deg=1, pop=pop, res=res, use_cache=use_cache)
-
-  srtm_diff05deg <- srtm -srtm_05deg
-  # srtm_diff1deg <- srtm -srtm_1deg
-
-  # srtm_1deg <- utils.focal_mean(srtm, d_deg=1, res=res, use_cache=use_cache)
-  # srtm_2deg <- utils.focal_mean(srtm, d_deg=2, res=res, use_cache=use_cache)
-
-  pop_05deg <- utils.focal_mean(pop, d_deg=0.5, pop=pop, res=res, use_cache=use_cache)
-  pm25_ss_dust_frac <- data.pm25_ss_dust_frac(pop, res, use_cache=use_cache)
-  lon <- data.lon(pop, res, use_cache=use_cache)
-  lat <- data.lat(pop, res, use_cache=use_cache)
-
-  # Not all predictors will be used but putting them together nonetheless
-  predictors <- list(
-    pm25_prior=pm25.base,
-    no2_prior=no2.base,
-    distance_coast=distance_coast,
-    distance_urban=distance_urban,
-    grump=grump,
-    pop=pop,
-    lon=lon,
-    lat=lat,
-    gadm0=gadm0,
-    gadm1=gadm1,
-    omi_diff=omi_diff,
-    pop_ratio_log=pop_ratio_log,
-    srtm=srtm,
-    srtm_05deg=srtm_05deg,
-    # srtm_1deg=srtm_1deg,
-    srtm_diff05deg=srtm_diff05deg,
-    # srtm_diff1deg=srtm_diff1deg,
-    pop_05deg=pop_05deg,
-    pm25_ss_dust_frac=pm25_ss_dust_frac
-  )
-
-  #rs: raster stack
-  predictors <- lapply(predictors, utils.to_raster) %>% raster::stack()
-
-  # Adding surrogate variables
-  # rs_predictors$distance_urban_inv <- 1/rs_predictors$distance_urban
-  # rs_predictors$distance_urban_inv[is.infinite(rs_predictors$distance_urban_inv)] <- 1/400
-  # rs_predictors$distance_urban_inv[rs_predictors$distance_urban_inv>1/400] <- 1/400
-  # rs_predictors$road_density_log <- log(rs_predictors$road_density + 1)
-  return(predictors)
-}
 
 
-data.grump <- function(pop, res, use_cache=T){
 
-  f <- file.path("cache", paste0("grump_",res,".tif"))
+data.grump <- function(pop, res, use_cache=T, suffix=""){
+
+  f <- file.path("cache", paste0("grump_",res,suffix,".tif"))
 
   if(!use_cache | !file.exists(f)){
     # https://sedac.ciesin.columbia.edu/data/collection/grump-v1
@@ -318,8 +321,8 @@ data.grump <- function(pop, res, use_cache=T){
   }
 }
 
-data.lon <- function(pop, res, use_cache=T){
-  f <- file.path("cache", paste0("lon_",res,".tif"))
+data.lon <- function(pop, res, use_cache=T, suffix=""){
+  f <- file.path("cache", paste0("lon_",res,suffix,".tif"))
   if(!use_cache | !file.exists(f)){
     xy <- coordinates(raster(pop))
     r_lon <- raster(pop)
@@ -331,8 +334,8 @@ data.lon <- function(pop, res, use_cache=T){
   }
 }
 
-data.lat <- function(pop, res, use_cache=T){
-  f <- file.path("cache", paste0("lat_",res,".tif"))
+data.lat <- function(pop, res, use_cache=T, suffix=""){
+  f <- file.path("cache", paste0("lat_",res,suffix,".tif"))
   if(!use_cache | !file.exists(f)){
     xy <- coordinates(raster(pop))
     r_lat <- raster(pop)
@@ -344,9 +347,9 @@ data.lat <- function(pop, res, use_cache=T){
   }
 }
 
-data.omi_diff <- function(pop, res, year_i=2011, year_f=2019, use_cache=T){
+data.omi_diff <- function(pop, res, year_i=2011, year_f=2019, use_cache=T, suffix=""){
 
-  f <- file.path("cache", sprintf("omi_diff_%d_%d_%s.tif",year_i, year_f, res))
+  f <- file.path("cache", sprintf("omi_diff_%d_%d_%s%s.tif",year_i, year_f, res, suffix))
 
   if(!use_cache | !file.exists(f)){
 
@@ -366,9 +369,9 @@ data.omi_diff <- function(pop, res, year_i=2011, year_f=2019, use_cache=T){
 }
 
 
-data.srtm <- function(pop, res, use_cache=T){
+data.srtm <- function(pop, res, use_cache=T, suffix=""){
 
-  f <- file.path("cache", paste0("srtm_",res,".tif"))
+  f <- file.path("cache", paste0("srtm_",res,suffix,".tif"))
 
   if(!use_cache | !file.exists(f)){
 
@@ -399,10 +402,10 @@ data.srtm <- function(pop, res, use_cache=T){
 #' @export
 #'
 #' @examples
-data.srtm_mean <- function(pop, res, d_deg=1, use_cache=T){
+data.srtm_mean <- function(pop, res, d_deg=1, use_cache=T, suffix=""){
 
   name <- sprintf("srtm_mean_%sdeg", d_deg)
-  f <- file.path("cache", sprintf("srtm_mean_%sdeg_%s.tif", d_deg, res))
+  f <- file.path("cache", sprintf("srtm_mean_%sdeg_%s%s.tif", d_deg, res, suffix))
 
   if(!use_cache | !file.exists(f)){
 
@@ -436,9 +439,9 @@ data.srtm_mean <- function(pop, res, d_deg=1, use_cache=T){
 #' @export
 #'
 #' @examples
-data.road_density_groads <- function(res, pop, use_cache=T){
+data.road_density_groads <- function(res, pop, use_cache=T, suffix=""){
 
-  f <- file.path("cache", paste0("road_density_groads_",res,".tif"))
+  f <- file.path("cache", paste0("road_density_groads_",res,suffix,".tif"))
 
   if(!use_cache | !file.exists(f)){
 
@@ -582,9 +585,9 @@ data.road_density_groads <- function(res, pop, use_cache=T){
 #' @export
 #'
 #' @examples
-data.road_density_grip <- function(res, pop, use_cache=T){
+data.road_density_grip <- function(res, pop, use_cache=T, suffix=""){
 
-  f <- file.path("cache", paste0("road_density_grip_",res,".tif"))
+  f <- file.path("cache", paste0("road_density_grip_",res,suffix,".tif"))
 
   if(!use_cache | !file.exists(f)){
 
@@ -609,9 +612,9 @@ data.road_density_grip <- function(res, pop, use_cache=T){
 }
 
 
-data.distance_urban <- function(pop, res, use_cache=T){
+data.distance_urban <- function(pop, res, use_cache=T, suffix=""){
 
-  f <- file.path("cache", paste0("distance_urban_",res,".tif"))
+  f <- file.path("cache", paste0("distance_urban_",res,suffix,".tif"))
 
   if(!use_cache | !file.exists(f)){
 
@@ -641,9 +644,9 @@ data.distance_urban <- function(pop, res, use_cache=T){
 }
 
 
-data.gadm_raster <- function(pop, res, level, use_cache=T){
+data.gadm_raster <- function(pop, res, level, use_cache=T, suffix=""){
 
-  f <- file.path("cache", paste0(sprintf("gadm%d_%s.tif", level, res)))
+  f <- file.path("cache", paste0(sprintf("gadm%d_%s%s.tif", level, res, suffix)))
 
   if(!use_cache | !file.exists(f)){
     g <- creahelpers::get_adm(level, "full")
@@ -686,9 +689,9 @@ data.gadm_raster <- function(pop, res, level, use_cache=T){
   }
 }
 
-data.landuse <- function(pop, res, use_cache=T){
+data.landuse <- function(pop, res, use_cache=T, suffix=""){
 
-  f <- file.path("cache", paste0("landuse_",res,".tif"))
+  f <- file.path("cache", paste0("landuse_",res,suffix,".tif"))
 
   if(!use_cache | !file.exists(f)){
     landuse <- terra::rast(creahelpers::get_landcover_path("C3S-LC-L4-LCCS-Map-300m-P1Y-2019-v2.1.1.nc"))$lccs_class %>%
@@ -801,9 +804,9 @@ data.landuse_factors <- function(as_factor=F){
 }
 
 
-data.distance_coast <- function(pop, res, use_cache=T){
+data.distance_coast <- function(pop, res, use_cache=T, suffix=""){
 
-  f <- file.path("cache", paste0("distance_coast_",res,".tif"))
+  f <- file.path("cache", paste0("distance_coast_",res,suffix,".tif"))
   if(!use_cache | !file.exists(f)){
     # Using NASA dist from coast
     # https://oceancolor.gsfc.nasa.gov/docs/distfromcoast/
@@ -832,9 +835,9 @@ data.distance_coast <- function(pop, res, use_cache=T){
 #' @export
 #'
 #' @examples
-data.pm25_ss_dust_frac <- function(pop, res, use_cache=T){
+data.pm25_ss_dust_frac <- function(pop, res, use_cache=T, suffix=""){
 
-  f <- sprintf("cache/pm25_ss_dust_frac_%s.tif", res)
+  f <- sprintf("cache/pm25_ss_dust_frac_%s%s.tif", res, suffix)
   if(file.exists(f) && use_cache){
     terra::rast(f)
   }else{
