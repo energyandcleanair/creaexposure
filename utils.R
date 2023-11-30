@@ -5,9 +5,9 @@ utils.focal_mean <- function(r, d_deg, pop, res, use_cache=T, suffix=""){
 
   if(!use_cache | !file.exists(f)){
 
-    w <- raster::focalWeight(raster(srtm), d_deg, "circle")
+    w <- raster::focalWeight(raster(r), d_deg, "circle")
     w[w>0] <- 1
-    r.focal <- raster::focal(raster(srtm),
+    r.focal <- raster::focal(raster(r),
                                      w,
                                      na.rm=T,
                                      pad=T,

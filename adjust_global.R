@@ -11,7 +11,7 @@ adjust_global <- function(pop,
   ###################################################
   # Get observations and predictors and these points
   obs <- data.get_obs(year=year, use_cache = use_cache)
-  predictors <- data.predictors(pop, res, year=year, use_cache = use_cache)
+  predictors <- data.predictors(pop, res, year=year, suffix=suffix, use_cache = use_cache)
   obs <- utils.add_predictors(obs, predictors)
 
   # obs$gadm0 <- as.factor(obs$gadm0)
