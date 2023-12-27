@@ -77,7 +77,7 @@ adjust_global <- function(pop,
     # We've manually checked smooth terms for s(pm25_prior) for every fitting and checked
     # it looked alright (e.g. low edf, consistent trend)
     pm25_formulas <- list(
-      "CN" = diff_pm25 ~ s(pm25_prior, k = 3) + s(distance_urban, k = 3) + s(lon, lat) + gadm1,
+      "CN" = diff_pm25 ~ s(pm25_prior, k = 3) + s(pm25_merra2_diff, k = 3) + s(distance_urban, k = 3) + s(lon, lat) + gadm1,
       "IN" = diff_pm25 ~ s(pm25_prior, k = 3) + s(pm25_ss_dust_frac) + s(lon, lat) + s(no2_prior),
       "NA" = diff_pm25 ~ s(srtm, k = 4) + s(pm25_prior, k = 3) + s(no2_prior) + s(lon, lat),
       "SEA" = diff_pm25 ~ s(pop_ratio_log, k = 3),
@@ -126,15 +126,15 @@ adjust_global <- function(pop,
     mask <- predictors$distance_urban < quantile(obs$distance_urban, 0.95, na.rm = T) # 0.25 deg
     mask[mask == 0] <- NA
     pm25_diff <- pm25_diff %>%
-      mask(mask) %>%
-      mask(utils.to_raster(pop))
+      raster::mask(mask) %>%
+      raster::mask(utils.to_raster(pop))
 
     writeRaster(pm25_diff, sprintf("results/pm25_adjustment_%s_%s%s.tif", res, year, suffix),
       overwrite = T
     )
 
-    pm25 <- raster::calc(stack(c(predictors$pm25_prior, pm25_diff)), sum, na.rm = T) %>%
-      mask(utils.to_raster(pop))
+    pm25 <- raster::calc(raster::stack(list(pm25_diff, predictors$pm25_prior)), sum, na.rm = T) %>%
+      raster::mask(utils.to_raster(pop))
 
     writeRaster(pm25, sprintf("results/pm25_adjusted_%s_%s%s.tif", res, year, suffix),
       overwrite = T
@@ -168,9 +168,9 @@ adjust_global <- function(pop,
       "IN" = diff_no2 ~ s(lon, lat) + s(pop_ratio_log, k = 3),
       "NA" = diff_no2 ~ s(lon, lat) + s(no2_prior, k = 3),
       "SEA" = diff_no2 ~ 1, # Couldn't find any better
-      "EU" = diff_no2 ~ s(omi_diff, k = 3) + s(distance_urban, k = 3) +
+      "EU" = diff_no2 ~ s(no2_omi_diff, k = 3) + s(distance_urban, k = 3) +
         s(pop, k = 3) + s(distance_coast, k = 3) + gadm0 + s(lon, lat),
-      "TR" = diff_no2 ~ s(omi_diff, k = 3),
+      "TR" = diff_no2 ~ s(no2_omi_diff, k = 3),
       "JP" = diff_no2 ~ s(no2_prior, k = 3) + s(pop_ratio_log, k = 3),
       "ZA" = diff_no2 ~ s(pop_ratio_log, k = 3),
       "TW" = diff_no2 ~ s(no2_prior, k = 3) + s(distance_urban, k = 3),
@@ -210,13 +210,14 @@ adjust_global <- function(pop,
     mask <- predictors$distance_urban < quantile(obs$distance_urban, 0.95, na.rm = T) # 0.29 deg
     mask[mask == 0] <- NA
     no2_diff <- no2_diff %>%
-      mask(mask) %>%
-      mask(utils.to_raster(pop))
+      raster::mask(mask) %>%
+      raster::mask(utils.to_raster(pop))
     writeRaster(no2_diff, sprintf("results/no2_adjustment_%s_%s%s.tif", res, year, suffix),
       overwrite = T
     )
 
-    no2 <- raster::calc(stack(c(predictors$no2_prior, no2_diff)), sum, na.rm = T) %>% mask(utils.to_raster(pop))
+    no2 <- raster::calc(raster::stack(c(predictors$no2_prior, no2_diff)), sum, na.rm = T) %>%
+      raster::mask(utils.to_raster(pop))
     writeRaster(no2, sprintf("results/no2_adjusted_%s_%s%s.tif", res, year, suffix),
       overwrite = T
     )
@@ -237,6 +238,8 @@ adjust_region <- function(obs_global, region, formula, predictors, poll, res,
 
   data <- data %>%
     mutate_at(intersect(names(.), c("gadm0", "gadm1")), as.factor)
+
+  formula <- utils.remove_constant_variables_from_formula(data=data, formula=formula)
 
   #####################
   # Train
@@ -261,26 +264,24 @@ adjust_region <- function(obs_global, region, formula, predictors, poll, res,
   #####################
   # Predict
   #####################
-  mask_region <- predictors$gadm0 %in% unique(data$gadm0)
+  mask_region <- raster::match(predictors$gadm0, unique(data$gadm0))
   mask_region[mask_region == 0] <- NA
 
   predfun <- function(model, data) {
-    v <- predict.gam(model, data, se.fit = TRUE)
+    v <- mgcv::predict.gam(model, data, se.fit = TRUE)
     cbind(p = as.vector(v$fit), se = as.vector(v$se.fit))
   }
 
-  predictors_slim <- subset(predictors, intersect(names(predictors), all.vars(formula))) %>%
-    mask(mask_region)
+  predictors_slim <- raster::subset(predictors, intersect(names(predictors), all.vars(formula))) %>%
+    raster::mask(mask_region)
 
-  pred <- predict(predictors_slim, model = model, fun = predfun, index = 1:2, na.rm = T)
+  pred <- raster::predict(predictors_slim, model = model, fun = predfun, index = 1:2, na.rm = T)
 
   # Check predicted values by raster and model are equal (risks when factors involvedd)
   check <- data %>% utils.add_predictors(pred)
   if (!all(check$predicted_model == check$predicted)) {
     stop("Something wrong in prediction. Probably has to do with factor levels")
   }
-  toc()
-
 
   return(pred)
 }
@@ -292,7 +293,7 @@ combine_preds <- function(preds, error_relative_threshold) {
     pred$predicted[pred$valid == 0] <- NA
     pred$predicted
   }) %>%
-    stack() %>%
+    raster::stack() %>%
     terra::rast() %>%
     terra::app(mean, na.rm = T) %>%
     raster()

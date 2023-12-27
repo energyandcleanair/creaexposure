@@ -96,3 +96,41 @@ utils.rasterize_lines <- function(lines, grid){
   res <- do.call(merge, ress)
   return(res)
 }
+
+#' Remove constant variables from formula to avoid modeling errors
+#'
+#' @param formula
+#' @param data
+#'
+#' @return
+#' @export
+#'
+#' @examples
+utils.remove_constant_variables_from_formula <- function(formula, data){
+
+  # At the moment, only works for numeric values
+  sd_safe <- function(x){
+    if(!is.numeric(x)) return(NA)
+    sd(x)
+  }
+  constant_variables <- names(which(sapply(data, sd_safe)==0))
+
+  remove_vars_from_formula <- function(formula, vars){
+    all_vars <- strsplit(as.character(formula[3]), " \\+ ")[[1]]
+    for(x in vars){
+      var_idx <- which(grepl(x, all_vars))
+      if(length(var_idx)==0) next
+      print(glue("Removing {x} from formula - constant"))
+      all_vars <- all_vars[-var_idx]
+    }
+
+    formula <- as.formula(
+      paste(formula[2], "~", paste(all_vars, collapse=" + "))
+    )
+    formula
+  }
+
+  formula <- remove_vars_from_formula(formula, vars=constant_variables)
+
+  return(formula)
+}

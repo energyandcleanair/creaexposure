@@ -81,11 +81,7 @@ data.predictors <- function(pop, res, year, use_cache=T, suffix=""){
   gadm0 <- raster(data.gadm_raster(pop, res, level=0, use_cache=use_cache, suffix=suffix))
   gadm1 <- raster(data.gadm_raster(pop, res, level=1, use_cache=use_cache, suffix=suffix))
 
-  pm25_merra2_diff <- data.pm25_merra2_diff(pop, res,
-                                       year_i=data.basemap_pm25_year(year),
-                                       year_f=min(year,2023),
-                                       use_cache=use_cache, suffix=suffix)
-  no2_omi_diff <- data.no2_omi_diff(pop, res, year_f=min(year,2022), use_cache=use_cache, suffix=suffix)
+  no2_omi_diff <- data.no2_omi_diff(pop, res, use_cache=use_cache, suffix=suffix)
   pop_ratio_log <- data.pop_ratio_log(pop, res, use_cache=use_cache, suffix=suffix)
   srtm <- data.srtm(pop, res, use_cache=use_cache, suffix=suffix)
   srtm_05deg <- utils.focal_mean(srtm, d_deg=0.5, pop=pop, res=res, use_cache=use_cache, suffix=suffix)
@@ -115,7 +111,6 @@ data.predictors <- function(pop, res, year, use_cache=T, suffix=""){
     gadm0=gadm0,
     gadm1=gadm1,
     no2_omi_diff=no2_omi_diff,
-    pm25_merra2_diff=pm25_merra2_diff,
     pop_ratio_log=pop_ratio_log,
     srtm=srtm,
     srtm_05deg=srtm_05deg,
@@ -138,16 +133,11 @@ data.predictors <- function(pop, res, year, use_cache=T, suffix=""){
 }
 
 
-data.basemap_pm25_year <- function(year){
-  basemap_years <- seq(2018, 2021)
-  basemap_year <- max(basemap_years[basemap_years<=year])
-  return(basemap_year)
-}
-
-
 data.basemap_pm25 <- function(pop, res, year=2020, use_cache=T, suffix=""){
 
-  basemap_year <- data.basemap_pm25_year(year)
+
+  basemap_years <- seq(2018, 2021)
+  basemap_year <- max(basemap_years[basemap_years<=year])
 
   f <- sprintf("cache/pm25_%s_%s%s.tif", basemap_year, res, suffix)
   if(file.exists(f) && use_cache){
@@ -357,29 +347,7 @@ data.lat <- function(pop, res, use_cache=T, suffix=""){
   }
 }
 
-data.pm25_merra2_diff <- function(pop, res, year_i=2020, year_f=2020, use_cache=T, suffix=""){
-
-  f <- file.path("cache", sprintf("pm25_merra2_diff_%d_%d_%s%s.tif", year_i, year_f, res, suffix))
-
-  if(!use_cache | !file.exists(f)){
-
-    pm25_merra2_i <- terra::rast(creahelpers::get_concentration_path(sprintf("pm25_merra2_%d.tif", year_i))) %>%
-      terra::resample(pop) %>% terra::mask(pop)
-
-    pm25_merra2_f <- terra::rast(creahelpers::get_concentration_path(sprintf("pm25_merra2_%d.tif", year_f))) %>%
-      terra::resample(pop) %>% terra::mask(pop)
-
-    pm25_merra2_diff <- pm25_merra2_f - pm25_merra2_i
-    pm25_merra2_diff <- pm25_merra2_diff * 1E10 # Scaling a bit...
-    terra::writeRaster(pm25_merra2_diff, f, overwrite=T)
-    return(pm25_merra2_diff)
-  }else{
-    terra::rast(f)
-  }
-}
-
 data.no2_omi_diff <- function(pop, res, year_i=2011, year_f=2019, use_cache=T, suffix=""){
-
 
   f <- file.path("cache", sprintf("no2_omi_diff_%d_%d_%s%s.tif",year_i, year_f, res, suffix))
 

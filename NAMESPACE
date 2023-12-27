@@ -24,12 +24,16 @@ importFrom(dplyr,rename)
 importFrom(dplyr,rowwise)
 importFrom(dplyr,select)
 importFrom(dplyr,select_at)
+importFrom(dplyr,slice)
 importFrom(dplyr,summarise)
 importFrom(dplyr,summarise_at)
 importFrom(dplyr,summarize)
 importFrom(dplyr,tibble)
 importFrom(dplyr,ungroup)
 importFrom(dplyr,vars)
+
+importFrom(glue,glue)
+
 
 importFrom(lubridate,date)
 importFrom(lubridate,decimal_date)
@@ -38,11 +42,22 @@ importFrom(lubridate,year)
 
 importFrom(magrittr,"%>%")
 
-importFrom(pbapply, "pbmapply")
-importFrom(pbapply, "pblapply")
+importFrom(mgcv,gam)
 
-importFrom(raster, "raster")
-importFrom(raster, "addLayer")
+importFrom(pbapply,pbmapply)
+importFrom(pbapply,pblapply)
+
+importFrom(raster,coordinates)
+importFrom(raster,raster)
+importFrom(raster,brick)
+importFrom(raster,addLayer)
+importFrom(raster,res)
+importFrom(raster,values)
+importFrom(raster,"values<-")
+importFrom(raster,"crs<-")
+importFrom(raster,writeRaster)
+
+importFrom(readr,read_csv)
 
 importFrom(sf,st_as_sf)
 importFrom(sf,st_as_sfc)
@@ -51,10 +66,10 @@ importFrom(sf,st_centroid)
 importFrom(sf,st_coordinates)
 importFrom(sf,st_union)
 
+importFrom(terra, rast)
+
 importFrom(tibble,tibble)
+
+importFrom(tidyr,drop_na)
 importFrom(tidyr,nest)
 importFrom(tidyr,unnest)
-
-importFrom(raster, brick)
-
-importFrom(terra, rast)
