@@ -32,7 +32,7 @@ data.get_obs <- function(polls=c("pm25","no2"), year=2020, use_cache=T){
       dplyr::mutate(geometry = sf::st_as_sfc(geometry))
 
     # We add Philipines data assuming year doesn't matter
-    obs_ph <- read_csv("data/ph_emb_derived_pm25.csv") %>%
+    obs_ph <- read_csv(utils.get_data_file("ph_emb_derived_pm25.csv")) %>%
       mutate(location_id=MonitorID,
              country="PH",
              poll="pm25",
