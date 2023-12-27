@@ -1,3 +1,8 @@
+data/
+results/
+.vscode/
+.lintr
+
 # History files
 .Rhistory
 .Rapp.history

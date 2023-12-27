@@ -1,0 +1,30 @@
+Package: aqexposuremap
+Type: Package
+Title: Building exposure map
+Version: 0.2.0
+Author: Hubert Thieriot
+Maintainer: Hubert Thieriot <hubert@energyandcleanair.com>
+Description: Creating adjusted global &amp; country maps based on observations and literature basemaps
+License: MIT
+Encoding: UTF-8
+LazyData: true
+Imports:
+    raster,
+    terra,
+    tidyverse,
+    rcrea,
+    creahelpers,
+    mgcv,
+    tictoc,
+    snow,
+    countrycode,
+    pbapply,
+    glue
+Depends:
+    ggplot2
+Remotes:
+    energyandcleanair/rcrea,
+    energyandcleanair/creajelpers
+Suggests: 
+VignetteBuilder:
+RoxygenNote: 7.1.1
