@@ -4,12 +4,13 @@ adjust_global <- function(pop,
                           suffix = "",
                           selected_regions = NULL,
                           year = 2022,
-                          use_cache = T) {
+                          use_cache = T,
+                          obs = NULL) {
   ###################################################
   # Prepare data
   ###################################################
   # Get observations and predictors and these points
-  obs <- data.get_obs(year = year, use_cache = use_cache)
+  obs <- dplyr::coalesce(obs, data.get_obs(year = year, use_cache = use_cache))
   predictors <- data.predictors(pop, res, year = year, suffix = suffix, use_cache = use_cache)
   obs <- utils.add_predictors(obs, predictors)
 
@@ -225,8 +226,14 @@ adjust_global <- function(pop,
 }
 
 
-adjust_region <- function(obs_global, region, formula, predictors, poll, res,
-                          gadm0_levels, gadm1_levels) {
+adjust_region <- function(obs_global,
+                          region,
+                          formula,
+                          predictors,
+                          poll,
+                          res,
+                          gadm0_levels,
+                          gadm1_levels) {
   #####################
   # Prepare data
   #####################
