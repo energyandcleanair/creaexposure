@@ -14,6 +14,9 @@
 
 # Build more accurate version for certain countries --------------------------------------
 
+res = aqexposuremap::RES_COARSE
+aqexposuremap::adjust_global(res=res)
+
 
 aqexposuremap::adjust_country("30_sec", "_india", "IND", "IN", 2018)
 aqexposuremap::adjust_country("30_sec", "_india", "IND", "IN", 2022)

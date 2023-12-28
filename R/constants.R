@@ -1,0 +1,11 @@
+RES_30_SEC = "30_sec"
+RES_2PT5_MIN = "2pt5_min"
+RES_15_MIN = "15_min"
+RES_1_DEG = "1_deg"
+
+RES_HIGH = RES_30_SEC
+RES_LOW = RES_2PT5_MIN
+RES_COARSE = RES_1_DEG
+
+MODEL_GAM = "gam"
+MODEL_RF = "rf"
