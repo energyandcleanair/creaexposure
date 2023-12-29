@@ -45,6 +45,7 @@ data.get_obs <- function(polls=c("pm25","no2"), year=2020, use_cache=T){
       as.data.frame()
 
     obs <- bind_rows(tibble(obs), tibble(obs_ph))
+    obs$type <- factor(obs$type)
 
 
     # NO2: 1 ppb = 1.88 µg/m3
@@ -90,6 +91,7 @@ data.predictors <- function(pop, res, year, use_cache=T, suffix=""){
   srtm <- data.srtm(pop, res, use_cache=use_cache, suffix=suffix)
   srtm_05deg <- utils.focal_mean(srtm, d_deg=0.5, pop=pop, res=res, use_cache=use_cache, suffix=suffix)
   # srtm_1deg <- utils.focal_mean(srtm, d_deg=1, pop=pop, res=res, use_cache=use_cache)
+  # type <- data.type(pop=pop)
 
   srtm_diff05deg <- srtm -srtm_05deg
   # srtm_diff1deg <- srtm -srtm_1deg
@@ -124,6 +126,7 @@ data.predictors <- function(pop, res, year, use_cache=T, suffix=""){
     # srtm_diff1deg=srtm_diff1deg,
     pop_05deg=pop_05deg,
     pm25_ss_dust_frac=pm25_ss_dust_frac
+    # type=type
   )
 
   #rs: raster stack
@@ -337,7 +340,7 @@ data.lon <- function(pop, res, use_cache=T, suffix=""){
     xy <- coordinates(raster(pop))
     r_lon <- raster(pop)
     r_lon[] <- xy[,1]
-    r_lon <- r_lon %>% mask(raster(pop))
+    r_lon <- r_lon %>% raster::mask(raster(pop))
     terra::writeRaster(r_lon, f, overwrite=T)
   }else{
     terra::rast(f)
@@ -350,7 +353,7 @@ data.lat <- function(pop, res, use_cache=T, suffix=""){
     xy <- coordinates(raster(pop))
     r_lat <- raster(pop)
     r_lat[] <- xy[,2]
-    r_lat <- r_lat %>% mask(raster(pop))
+    r_lat <- r_lat %>% raster::mask(raster(pop))
     terra::writeRaster(r_lat, f, overwrite=T)
   }else{
     terra::rast(f)
@@ -676,11 +679,11 @@ data.distance_urban <- function(pop, res, use_cache=T, suffix=""){
 }
 
 
-data.gadm_raster <- function(pop, res, level, use_cache=T, suffix=""){
+data.gadm_raster <- function(pop, res, level, use_cache=T, suffix="", as_factor=T){
 
   f <- file.path("cache", paste0(sprintf("gadm%d_%s%s.tif", level, res, suffix)))
 
-  if(!use_cache | !file.exists(f)){
+  gadm_raster <- if(!use_cache | !file.exists(f)){
     g <- creahelpers::get_adm(level, "full")
     gid_level <- sprintf("GID_%d",level)
 
@@ -709,16 +712,22 @@ data.gadm_raster <- function(pop, res, level, use_cache=T, suffix=""){
     }
 
     r <- raster(r)
-    w <- raster::focalWeight(r, 0.3, "rectangle")
+    # We want 0.3 deg min. But if res is coarser, let's increase the focal
+    w <- raster::focalWeight(r, max(min(res(r)) * 1.1, 0.3), "rectangle")
     w[] <- 1
     r_filled <- creahelpers::focal.loop(r, w, fill.na, NAonly=T)
-
-    values(r_filled)[is.na(values(raster(pop)))] <- NA
+    # values(r_filled)[is.na(values(raster(pop)))] <- NA
     raster::writeRaster(r_filled, f, overwrite=T)
-    return(terra::rast(r_filled))
+    r_filled
   }else{
     terra::rast(f)
   }
+
+  if(as_factor){
+    gadm_raster <- gadm_raster %>% terra::as.factor()
+  }
+
+  return(gadm_raster)
 }
 
 data.landuse <- function(pop, res, use_cache=T, suffix=""){
@@ -880,4 +889,19 @@ data.pm25_ss_dust_frac <- function(pop, res, use_cache=T, suffix=""){
     raster::writeRaster(ss_dust_frac, f, overwrite=T)
     return(ss_dust_frac)
   }
+}
+
+
+data.type <- function(pop){
+  # Tweak for Philippines
+  # We added EMB measurements, plus Lauri's estimations using various methods
+  # See https://github.com/energyandcleanair/202108_hia_philippines
+  # We add a "measured"
+
+  # Note: deprecated, plus doesn't it mean that non "measured" measurements will get ignored?
+  type_raster <- pop %>% `names<-`("type")
+  type_raster[!is.na(type_raster)] <- 1
+  type_raster <- terra::as.factor(type_raster)
+  levels(type_raster) <- terra::levels(type_raster)[[1]] %>% mutate(type="measured")
+  return(type_raster)
 }

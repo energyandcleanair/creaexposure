@@ -14,6 +14,14 @@
 
 # Build more accurate version for certain countries --------------------------------------
 
+lapply(seq(2020, 2023), function(year){
+  aqexposuremap::adjust_global(res=aqexposuremap::RES_2PT5_MIN,
+                               suffix="_china",
+                               selected_regions = "CN",
+                               year=year,
+                               model=MODEL_RF)
+})
+
 
 aqexposuremap::adjust_country("30_sec", "_india", "IND", "IN", 2018)
 aqexposuremap::adjust_country("30_sec", "_india", "IND", "IN", 2022)

@@ -1,6 +1,9 @@
 # Export all functions
 exportPattern("^[[:alpha:]]+")
 
+
+importFrom(creahelpers, default_if_null)
+
 importFrom(dplyr,all_vars)
 importFrom(dplyr,any_vars)
 importFrom(dplyr,arrange)
