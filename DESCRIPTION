@@ -24,7 +24,7 @@ Depends:
     ggplot2
 Remotes:
     energyandcleanair/rcrea,
-    energyandcleanair/creajelpers
+    energyandcleanair/creahelpers
 Suggests: 
 VignetteBuilder:
 RoxygenNote: 7.1.1
