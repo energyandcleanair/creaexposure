@@ -1,8 +1,10 @@
-models.gam.predict <- function(obs, poll, predictors, res, year, regions, suffix){
+models.gam.predict <- function(obs, poll, predictors, res, year, regions, suffix, results_folder="results/gam"){
+
+  dir.create(results_folder, recursive = T, showWarnings = F)
 
   predict_fns <- list(
     "pm25"=models.gam.predict.pm25,
-    "no2"=models.gam.predict.no2,
+    "no2"=models.gam.predict.no2
   )
 
   predict_fns[[poll]](
@@ -10,7 +12,9 @@ models.gam.predict <- function(obs, poll, predictors, res, year, regions, suffix
     predictors=predictors,
     res=res,
     regions=regions,
-    suffix=suffix
+    suffix=suffix,
+    year=year,
+    results_folder=results_folder
   )
 }
 
@@ -22,7 +26,8 @@ models.gam.predict.generic <- function(obs_global,
                                        poll,
                                        res,
                                        gadm0_levels,
-                                       gadm1_levels) {
+                                       gadm1_levels,
+                                       results_folder) {
   #####################
   # Prepare data
   #####################
@@ -46,7 +51,7 @@ models.gam.predict.generic <- function(obs_global,
   #####################
   # Quick diagnosis
   #####################
-  sink(file = sprintf("results/gam_%s_%s_%s.txt", res, poll, region))
+  sink(file = glue("{results_folder}/gam_{res}_{poll}_{region}.txt"))
   print(summary(model))
   sink(file = NULL)
   p <- predict(model, data, se.fit = T)
@@ -102,12 +107,11 @@ models.gam.combine_predictions <- function(preds, error_relative_threshold) {
     raster::stack() %>%
     terra::rast() %>%
     terra::app(mean, na.rm = T) %>%
-    raster()
+    raster::raster()
 }
 
 
-
-models.gam.predict.pm25 <- function(obs, predictors, regions, res, year, suffix){
+models.gam.predict.pm25 <- function(obs, predictors, regions, res, year, suffix, results_folder){
 
   obs_pm25 <- obs %>%
     filter(poll == "pm25") %>%
@@ -137,7 +141,9 @@ models.gam.predict.pm25 <- function(obs, predictors, regions, res, year, suffix)
   pm25_preds <- pblapply(names(regions), function(region) {
     print(region)
 
-    f <- sprintf("cache/pm25_pred_%s_%s_%s%s.tif", res, region, year, suffix)
+    f <- glue("cache/{MODEL_GAM}/pm25_pred_{res}_{region}_{year}{suffix}.tif")
+    dir.create(dirname(f), recursive = T, showWarnings = F)
+
     if (use_cache & file.exists(f)) {
       raster::stack(f) %>% `names<-`(c("predicted", "error"))
     } else {
@@ -149,7 +155,8 @@ models.gam.predict.pm25 <- function(obs, predictors, regions, res, year, suffix)
             formula = pm25_formulas[[region]],
             predictors = predictors,
             poll = "pm25",
-            res = res
+            res = res,
+            results_folder = results_folder
           )
           writeRaster(region_preds, f, overwrite = T)
           names(region_preds) <- c("predicted", "error")
@@ -164,26 +171,26 @@ models.gam.predict.pm25 <- function(obs, predictors, regions, res, year, suffix)
   })
 
 
-  pm25_diff <- combine_preds(pm25_preds, error_relative_threshold = 1.645)
+  pm25_diff <- models.gam.combine_predictions(pm25_preds, error_relative_threshold = 1.645)
 
   mask <- predictors$distance_urban < quantile(obs$distance_urban, 0.95, na.rm = T) # 0.25 deg
   mask[mask == 0] <- NA
   pm25_diff <- pm25_diff %>%
     raster::mask(mask) %>%
-    raster::mask(utils.to_raster(pop))
+    raster::mask(creahelpers::to_raster(predictors$pop))
 
-  writeRaster(pm25_diff, glue("results/pm25_adjustment_{res}_{year}{suffix}.tif"),
+  writeRaster(pm25_diff, glue("{results_folder}/pm25_adjustment_{res}_{year}{suffix}.tif"),
               overwrite = T)
 
   pm25 <- raster::calc(raster::stack(list(pm25_diff, predictors$pm25_prior)), sum, na.rm = T) %>%
-    raster::mask(utils.to_raster(pop))
+    raster::mask(creahelpers::to_raster(predictors$pop))
 
-  writeRaster(pm25, glue("results/pm25_adjusted_{res}_{year}{suffix}.tif"),
+  writeRaster(pm25, glue("{results_folder}/pm25_{res}_{year}{suffix}.tif"),
               overwrite = T
   )
 
   pm25_noss <- pm25 * (1 - predictors$pm25_ss_dust_frac) # Remove sea salt & dust contribution
-  writeRaster(pm25_noss, glue("results/pm25_adjusted_no_ss_dust_{res}_{year}{suffix}.tif"),
+  writeRaster(pm25_noss, glue("{results_folder}/pm25_no_ss_dust_{res}_{year}{suffix}.tif"),
               overwrite = T
   )
 
@@ -195,7 +202,7 @@ models.gam.predict.pm25 <- function(obs, predictors, regions, res, year, suffix)
   )
 }
 
-models.gam.predict.no2 <- function(obs, predictors, regions, year, suffix){
+models.gam.predict.no2 <- function(obs, predictors, regions, res, year, suffix, results_folder){
 
   obs_no2 <- obs %>%
     filter(poll == "no2") %>%
@@ -226,7 +233,9 @@ models.gam.predict.no2 <- function(obs, predictors, regions, year, suffix){
   no2_preds <- pblapply(names(regions), function(region) {
     print(region)
 
-    f <- sprintf("cache/no2_pred_%s_%s%s.tif", res, region, suffix)
+    f <- glue("cache/{MODEL_GAM}/no2_pred_{res}_{region}_{year}{suffix}.tif")
+    dir.create(dirname(f), recursive = T, showWarnings = F)
+
     if (file.exists(f)) {
       raster::stack(f) %>% `names<-`(c("predicted", "error"))
     } else {
@@ -238,7 +247,8 @@ models.gam.predict.no2 <- function(obs, predictors, regions, year, suffix){
             formula = no2_formulas[[region]],
             predictors = predictors,
             poll = "no2",
-            res = res
+            res = res,
+            results_folder = results_folder
           )
           writeRaster(region_preds, f)
           names(region_preds) <- c("predicted", "error")
@@ -257,14 +267,14 @@ models.gam.predict.no2 <- function(obs, predictors, regions, year, suffix){
   mask[mask == 0] <- NA
   no2_diff <- no2_diff %>%
     raster::mask(mask) %>%
-    raster::mask(utils.to_raster(pop))
-  writeRaster(no2_diff, glue("results/no2_adjustment_{res}_{year}{suffix}.tif"),
+    raster::mask(creahelpers::to_raster(predictors$pop))
+  writeRaster(no2_diff, glue("{results_folder}/no2_adjustment_{res}_{year}{suffix}.tif"),
               overwrite = T
   )
 
   no2 <- raster::calc(raster::stack(c(predictors$no2_prior, no2_diff)), sum, na.rm = T) %>%
-    raster::mask(utils.to_raster(pop))
-  writeRaster(no2, glue("results/no2_adjusted_{res}_{year}{suffix}.tif"),
+    raster::mask(creahelpers::to_raster(predictors$pop))
+  writeRaster(no2, glue("{results_folder}/no2_adjusted_{res}_{year}{suffix}.tif"),
               overwrite = T
   )
 

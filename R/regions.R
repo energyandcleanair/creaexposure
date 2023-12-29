@@ -1,4 +1,4 @@
-get_region <- function(){
+get_regions <- function(selected_regions=NULL){
     regions <- list(
       "NA" = c("US", "CA", "MX"),
       "IN" = "IN",
@@ -35,3 +35,12 @@ add_region_to_obs <- function(obs, regions){
   return(obs)
 }
 
+get_bb <- function(selected_regions = NULL){
+  if(is.null(selected_regions)) return(NULL)
+
+  iso2s <- unlist(get_regions(selected_regions))
+  iso3s <- countrycode::countrycode(iso2s, "iso2c", "iso3c")
+
+  bb <- data.gadm0() %>% subset(GID_0 %in% iso3s) %>% sf::st_as_sf() %>% sf::st_bbox()
+  return(bb)
+}

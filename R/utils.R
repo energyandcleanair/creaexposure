@@ -7,12 +7,16 @@ utils.focal_mean <- function(r, d_deg, pop, res, use_cache=T, suffix=""){
 
     w <- raster::focalWeight(raster(r), d_deg, "circle")
     w[w>0] <- 1
-    r.focal <- raster::focal(raster(r),
-                                     w,
-                                     na.rm=T,
-                                     pad=T,
-                                     fun=mean) %>%
-      terra::rast()
+    r.focal <- if(all(dim(w)==c(1,1))){
+      r
+    }else{
+      raster::focal(raster(r),
+                    w,
+                    na.rm=T,
+                    pad=T,
+                    fun=mean) %>%
+        terra::rast()
+    }
 
     r.focal[is.na(pop)] <- NA
     names(r.focal) <- name
@@ -151,4 +155,23 @@ utils.get_data_file <- function(filename, data_folder="inst/extdata"){
   }
 
   return(path)
+}
+
+
+#' Stations are predominantly in cities. We therefore do not update map in rural areas where
+#' the model predictive power might be too weak
+#'
+#' @param r
+#' @param predictors
+#' @param obs
+#'
+#' @return
+#' @export
+#'
+#' @examples
+utils.mask_far_from_urban <- function(r, predictors, obs, quantile=0.95){
+  mask <- predictors$distance_urban < quantile(obs$distance_urban, quantile, na.rm = T)
+  mask[mask == 0] <- NA
+  r %>%
+    raster::mask(mask)
 }

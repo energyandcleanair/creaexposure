@@ -12,7 +12,7 @@ adjust_global <- function(res,
   ###################################################
   # Get observations and predictors and these points
   obs <- default_if_null(obs, data.get_obs(year = year, use_cache = use_cache))
-  pop <- default_if_null(pop, data.pop(res=res))
+  pop <- default_if_null(pop, data.pop(res=res, bb=get_bb(selected_regions)))
   predictors <- data.predictors(pop, res, year = year, suffix = suffix, use_cache = use_cache)
   obs <- utils.add_predictors(obs, predictors)
 
@@ -27,10 +27,10 @@ adjust_global <- function(res,
   #   View()
 
 
-  for(poll in polls){
+  for(poll_ in poll){
     for(model in models){
       models.predict(model=models,
-                     poll=poll,
+                     poll=poll_,
                      regions=regions,
                      res=res,
                      year=year,
