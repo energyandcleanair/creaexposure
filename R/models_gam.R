@@ -111,7 +111,7 @@ models.gam.combine_predictions <- function(preds, error_relative_threshold) {
 }
 
 
-models.gam.predict.pm25 <- function(obs, predictors, regions, res, year, suffix, results_folder){
+models.gam.predict.pm25 <- function(obs, predictors, regions, res, year, suffix, results_folder, use_cache=F){
 
   obs_pm25 <- obs %>%
     filter(poll == "pm25") %>%
