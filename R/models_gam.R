@@ -1,20 +1,37 @@
-models.gam.predict <- function(obs, poll, predictors, res, year, regions, suffix, results_folder="results/gam"){
+models.gam.predict <- function(
+    obs,
+    poll,
+    predictors,
+    res,
+    year,
+    regions,
+    suffix,
+    force_rebuild = T,
+    results_folder = "results/gam",
+    remove_seasalt_dust_contribution = T,
+    limit_distance_urban = T,
+    distance_urban_quantile = 0.95,
+    ...) {
 
   dir.create(results_folder, recursive = T, showWarnings = F)
 
   predict_fns <- list(
-    "pm25"=models.gam.predict.pm25,
-    "no2"=models.gam.predict.no2
+    "pm25" = models.gam.predict.pm25,
+    "no2" = models.gam.predict.no2
   )
 
   predict_fns[[poll]](
-    obs=obs,
-    predictors=predictors,
-    res=res,
-    regions=regions,
-    suffix=suffix,
-    year=year,
-    results_folder=results_folder
+    obs = obs,
+    predictors = predictors,
+    res = res,
+    regions = regions,
+    suffix = suffix,
+    year = year,
+    results_folder = results_folder,
+    limit_distance_urban = limit_distance_urban,
+    distance_urban_quantile = distance_urban_quantile,
+    remove_seasalt_dust_contribution = remove_seasalt_dust_contribution,
+    force_rebuild = force_rebuild
   )
 }
 
@@ -27,7 +44,8 @@ models.gam.predict.generic <- function(obs_global,
                                        res,
                                        gadm0_levels,
                                        gadm1_levels,
-                                       results_folder) {
+                                       results_folder,
+                                       ...) {
   #####################
   # Prepare data
   #####################
@@ -40,7 +58,7 @@ models.gam.predict.generic <- function(obs_global,
   data <- data %>%
     mutate_at(intersect(names(.), c("gadm0", "gadm1")), as.factor)
 
-  formula <- utils.remove_constant_variables_from_formula(data=data, formula=formula)
+  formula <- utils.remove_constant_variables_from_formula(data = data, formula = formula)
 
   #####################
   # Train
@@ -110,8 +128,28 @@ models.gam.combine_predictions <- function(preds, error_relative_threshold) {
     raster::raster()
 }
 
+models.gam.result_filepath <- function(poll, res, year, suffix, folder, extension = "tif"){
+  glue("{folder}/{poll}_{res}_{year}{suffix}.{extension}")
+}
 
-models.gam.predict.pm25 <- function(obs, predictors, regions, res, year, suffix, results_folder, use_cache=F){
+
+models.gam.predict.pm25 <- function(obs, predictors, regions, res, year, suffix, results_folder, force_rebuild,
+                                      limit_distance_urban, distance_urban_quantile, remove_seasalt_dust_contribution,
+                                      ...
+
+) {
+
+  filepath <- models.rf.result_filepath(
+    poll = "pm25",
+    res = res,
+    year = year,
+    suffix = suffix,
+    folder = results_folder
+  )
+
+  if(file.exists(filepath) & !force_rebuild){
+    return(raster::raster(filepath))
+  }
 
   obs_pm25 <- obs %>%
     filter(poll == "pm25") %>%
@@ -139,14 +177,6 @@ models.gam.predict.pm25 <- function(obs, predictors, regions, res, year, suffix,
   )
 
   pm25_preds <- pblapply(names(regions), function(region) {
-    print(region)
-
-    f <- glue("cache/{MODEL_GAM}/pm25_pred_{res}_{region}_{year}{suffix}.tif")
-    dir.create(dirname(f), recursive = T, showWarnings = F)
-
-    if (use_cache & file.exists(f)) {
-      raster::stack(f) %>% `names<-`(c("predicted", "error"))
-    } else {
       tryCatch(
         {
           region_preds <- models.gam.predict.generic(
@@ -158,7 +188,6 @@ models.gam.predict.pm25 <- function(obs, predictors, regions, res, year, suffix,
             res = res,
             results_folder = results_folder
           )
-          writeRaster(region_preds, f, overwrite = T)
           names(region_preds) <- c("predicted", "error")
           region_preds
         },
@@ -167,43 +196,43 @@ models.gam.predict.pm25 <- function(obs, predictors, regions, res, year, suffix,
           return(NA)
         }
       )
-    }
-  })
-
+    })
 
   pm25_diff <- models.gam.combine_predictions(pm25_preds, error_relative_threshold = 1.645)
 
-  mask <- predictors$distance_urban < quantile(obs$distance_urban, 0.95, na.rm = T) # 0.25 deg
-  mask[mask == 0] <- NA
-  pm25_diff <- pm25_diff %>%
-    raster::mask(mask) %>%
-    raster::mask(creahelpers::to_raster(predictors$pop))
-
-  writeRaster(pm25_diff, glue("{results_folder}/pm25_adjustment_{res}_{year}{suffix}.tif"),
-              overwrite = T)
+  pm25_diff <- utils.mask_far_from_urban(
+    r = pm25_diff,
+    predictors = predictors,
+    obs = obs,
+    quantile = 0.95
+  )
 
   pm25 <- raster::calc(raster::stack(list(pm25_diff, predictors$pm25_prior)), sum, na.rm = T) %>%
     raster::mask(creahelpers::to_raster(predictors$pop))
 
-  writeRaster(pm25, glue("{results_folder}/pm25_{res}_{year}{suffix}.tif"),
-              overwrite = T
-  )
-
-  pm25_noss <- pm25 * (1 - predictors$pm25_ss_dust_frac) # Remove sea salt & dust contribution
-  writeRaster(pm25_noss, glue("{results_folder}/pm25_no_ss_dust_{res}_{year}{suffix}.tif"),
-              overwrite = T
-  )
-
-  return(
-    list(
-      "pm25"=pm25,
-      "pm25_noss"=pm25_noss
+  # Remove far from urban
+  if (limit_distance_urban) {
+    pm25 <- utils.mask_far_from_urban(
+      r = pm25,
+      predictors = predictors,
+      obs = obs,
+      quantile = distance_urban_quantile
     )
-  )
+  }
+
+  # Remove sea salt contribution
+  if (remove_seasalt_dust_contribution) {
+    pm25 <- pm25 * (1 - predictors$pm25_ss_dust_frac)
+  }
+
+  writeRaster(pm25, filepath, overwrite=T)
+
+  return(pm25)
 }
 
-models.gam.predict.no2 <- function(obs, predictors, regions, res, year, suffix, results_folder){
-
+models.gam.predict.no2 <- function(obs, predictors, regions, res, year, suffix, results_folder, force_rebuild,
+                                      limit_distance_urban, distance_urban_quantile, remove_seasalt_dust_contribution,
+                                      ...) {
   obs_no2 <- obs %>%
     filter(poll == "no2") %>%
     mutate(diff_no2 = value - no2_prior)
@@ -262,22 +291,24 @@ models.gam.predict.no2 <- function(obs, predictors, regions, res, year, suffix, 
     }
   })
 
-  no2_diff <- models.gam.combine_predictions(preds=no2_preds, error_relative_threshold = 1.645)
-  mask <- predictors$distance_urban < quantile(obs$distance_urban, 0.95, na.rm = T) # 0.29 deg
-  mask[mask == 0] <- NA
-  no2_diff <- no2_diff %>%
-    raster::mask(mask) %>%
-    raster::mask(creahelpers::to_raster(predictors$pop))
+  no2_diff <- models.gam.combine_predictions(preds = no2_preds, error_relative_threshold = 1.645)
+
+  no2_diff <- utils.mask_far_from_urban(
+    r = no2_diff,
+    predictors = predictors,
+    obs = obs,
+    quantile = 0.95
+  )
+
   writeRaster(no2_diff, glue("{results_folder}/no2_adjustment_{res}_{year}{suffix}.tif"),
-              overwrite = T
+    overwrite = T
   )
 
   no2 <- raster::calc(raster::stack(c(predictors$no2_prior, no2_diff)), sum, na.rm = T) %>%
     raster::mask(creahelpers::to_raster(predictors$pop))
   writeRaster(no2, glue("{results_folder}/no2_adjusted_{res}_{year}{suffix}.tif"),
-              overwrite = T
+    overwrite = T
   )
 
-  return(list(no2=no2))
-
+  return(list(no2 = no2))
 }

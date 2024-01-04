@@ -7,6 +7,7 @@
 data.get_obs <- function(polls=c("pm25","no2"), year=2020, use_cache=T){
 
   f <- sprintf("cache/obs_%s_%s.RDS", year, paste(polls, collapse="_"))
+  dir.create(dirname(f), F, T)
   if(file.exists(f) && use_cache){
     return(readRDS(f))
   }else{
@@ -79,8 +80,8 @@ data.predictors <- function(pop, res, year, use_cache=T, suffix=""){
   distance_coast <- data.distance_coast(pop, res, use_cache=use_cache, suffix=suffix)
   distance_urban <- data.distance_urban(pop, res, use_cache=use_cache, suffix=suffix)
   grump <- data.grump(pop, res, use_cache=use_cache, suffix=suffix)
-  gadm0 <- raster(data.gadm_raster(pop, res, level=0, use_cache=use_cache, suffix=suffix))
-  gadm1 <- raster(data.gadm_raster(pop, res, level=1, use_cache=use_cache, suffix=suffix))
+  gadm0 <- data.gadm_raster(pop, res, level=0, use_cache=use_cache, suffix=suffix)
+  gadm1 <- data.gadm_raster(pop, res, level=1, use_cache=use_cache, suffix=suffix)
 
   pm25_merra2_diff <- data.pm25_merra2_diff(pop, res,
                                        year_i=data.basemap_pm25_year(year),
@@ -101,6 +102,7 @@ data.predictors <- function(pop, res, year, use_cache=T, suffix=""){
 
   pop_05deg <- utils.focal_mean(pop, d_deg=0.5, pop=pop, res=res, use_cache=use_cache, suffix=suffix)
   pm25_ss_dust_frac <- data.pm25_ss_dust_frac(pop, res, use_cache=use_cache, suffix=suffix)
+  pm25_ss_dust <- data.pm25_ss_dust(pop, res, use_cache=use_cache, suffix=suffix)
   lon <- data.lon(pop, res, use_cache=use_cache, suffix=suffix)
   lat <- data.lat(pop, res, use_cache=use_cache, suffix=suffix)
 
@@ -125,12 +127,13 @@ data.predictors <- function(pop, res, year, use_cache=T, suffix=""){
     srtm_diff05deg=srtm_diff05deg,
     # srtm_diff1deg=srtm_diff1deg,
     pop_05deg=pop_05deg,
-    pm25_ss_dust_frac=pm25_ss_dust_frac
+    pm25_ss_dust_frac=pm25_ss_dust_frac,
+    pm25_ss_dust=pm25_ss_dust
     # type=type
   )
 
   #rs: raster stack
-  predictors <- lapply(predictors, utils.to_raster) %>% raster::stack()
+  predictors <- creahelpers::to_raster(predictors) %>% raster::stack()
 
   # Adding surrogate variables
   # rs_predictors$distance_urban_inv <- 1/rs_predictors$distance_urban
@@ -304,6 +307,7 @@ data.pop_ratio_log <- function(pop, res, use_cache=T, suffix=""){
     r_ratio <- max(log(min(r2020/r2010,10)), -2)
     names(r_ratio) <- "pop_ratio"
     writeRaster(r_ratio, f, overwrite=T)
+    return(r_ratio)
   }else{
     rast(f)
   }
@@ -342,6 +346,7 @@ data.lon <- function(pop, res, use_cache=T, suffix=""){
     r_lon[] <- xy[,1]
     r_lon <- r_lon %>% raster::mask(raster(pop))
     terra::writeRaster(r_lon, f, overwrite=T)
+    return(r_lon)
   }else{
     terra::rast(f)
   }
@@ -355,6 +360,7 @@ data.lat <- function(pop, res, use_cache=T, suffix=""){
     r_lat[] <- xy[,2]
     r_lat <- r_lat %>% raster::mask(raster(pop))
     terra::writeRaster(r_lat, f, overwrite=T)
+    return(r_lat)
   }else{
     terra::rast(f)
   }
@@ -593,14 +599,6 @@ data.road_density_groads <- function(res, pop, use_cache=T, suffix=""){
     cells_x[rp.sum$i_cell] <- rp.sum$length
     grid_result <- grid
     grid_result[] <- cells_x
-
-
-
-
-
-
-
-
     writeRaster(r, f)
     return(r)
   }else{
@@ -711,14 +709,14 @@ data.gadm_raster <- function(pop, res, level, use_cache=T, suffix="", as_factor=
       }
     }
 
-    r <- raster(r)
+    r <- creahelpers::to_raster(r)
     # We want 0.3 deg min. But if res is coarser, let's increase the focal
     w <- raster::focalWeight(r, max(min(res(r)) * 1.1, 0.3), "rectangle")
     w[] <- 1
     r_filled <- creahelpers::focal.loop(r, w, fill.na, NAonly=T)
     # values(r_filled)[is.na(values(raster(pop)))] <- NA
     raster::writeRaster(r_filled, f, overwrite=T)
-    r_filled
+    return(r_filled)
   }else{
     terra::rast(f)
   }
@@ -882,12 +880,37 @@ data.pm25_ss_dust_frac <- function(pop, res, use_cache=T, suffix=""){
   if(file.exists(f) && use_cache){
     terra::rast(f)
   }else{
-    pm25_w_ssd <- raster(creahelpers::get_concentration_path("ACAG_PM25_GWR_V4GL03_201901_201912_0p01.tif"))
-    pm25_wo_ssd <- raster(creahelpers::get_concentration_path("ACAG_PM25_noDUSTnoSEASALT_GWR_V4GL03_201901_201912_0p01.tif"))
+    pm25_w_ssd <- terra::rast(creahelpers::get_concentration_path("ACAG_PM25_GWR_V4GL03_201901_201912_0p01.tif"))
+    pm25_wo_ssd <- terra::rast(creahelpers::get_concentration_path("ACAG_PM25_noDUSTnoSEASALT_GWR_V4GL03_201901_201912_0p01.tif"))
     ss_dust_frac <- (pm25_w_ssd - pm25_wo_ssd)/ pm25_w_ssd
-    ss_dust_frac <- ss_dust_frac %>% raster::resample(raster(pop))
-    raster::writeRaster(ss_dust_frac, f, overwrite=T)
+    ss_dust_frac <- ss_dust_frac %>% terra::resample(terra::rast(pop))
+    terra::writeRaster(ss_dust_frac, f, overwrite=T)
     return(ss_dust_frac)
+  }
+}
+
+#' Seasalt and dust contribution
+#'
+#' @param pop
+#' @param res
+#' @param use_cache
+#'
+#' @return
+#' @export
+#'
+#' @examples
+data.pm25_ss_dust <- function(pop, res, use_cache=T, suffix=""){
+
+  f <- sprintf("cache/pm25_ss_dust_%s%s.tif", res, suffix)
+  if(file.exists(f) && use_cache){
+    terra::rast(f)
+  }else{
+    pm25_w_ssd <- terra::rast(creahelpers::get_concentration_path("ACAG_PM25_GWR_V4GL03_201901_201912_0p01.tif"))
+    pm25_wo_ssd <- terra::rast(creahelpers::get_concentration_path("ACAG_PM25_noDUSTnoSEASALT_GWR_V4GL03_201901_201912_0p01.tif"))
+    ss_dust <- pm25_w_ssd - pm25_wo_ssd
+    ss_dust <- ss_dust %>% terra::resample(terra::rast(pop))
+    terra::writeRaster(ss_dust, f, overwrite=T)
+    return(ss_dust)
   }
 }
 

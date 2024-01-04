@@ -19,7 +19,9 @@ Imports:
     snow,
     countrycode,
     pbapply,
-    glue
+    glue,
+    caret,
+    randomForest
 Depends:
     ggplot2
 Remotes:

@@ -1,4 +1,16 @@
-models.rf.predict <- function(obs, poll, predictors, res, year, regions, suffix, results_folder="results/rf") {
+models.rf.predict <- function(obs,
+                              poll,
+                              predictors,
+                              res,
+                              year,
+                              regions,
+                              suffix,
+                              force_rebuild = T,
+                              results_folder = "results/rf",
+                              remove_seasalt_dust_contribution = T,
+                              limit_distance_urban = T,
+                              distance_urban_quantile = 0.95,
+                              ...) {
 
   dir.create(results_folder, recursive = T, showWarnings = F)
 
@@ -14,13 +26,30 @@ models.rf.predict <- function(obs, poll, predictors, res, year, regions, suffix,
     regions = regions,
     suffix = suffix,
     year = year,
-    results_folder = results_folder
+    results_folder = results_folder,
+    limit_distance_urban = limit_distance_urban,
+    distance_urban_quantile = distance_urban_quantile,
+    remove_seasalt_dust_contribution = remove_seasalt_dust_contribution,
+    force_rebuild = force_rebuild
   )
 }
 
 
-models.rf.predict.generic <- function(formula, obs, region, predictors, prior, poll, res, year, diagnostics_folder="diagnostics/rf") {
-
+models.rf.predict.generic <- function(formula,
+                                      obs,
+                                      region,
+                                      predictors,
+                                      prior,
+                                      poll,
+                                      res,
+                                      year,
+                                      suffix,
+                                      limit_distance_urban,
+                                      distance_urban_quantile,
+                                      remove_seasalt_dust_contribution,
+                                      results_folder,
+                                      diagnostics_folder = results_folder,
+                                      ...) {
   # Prepare data
   data <- obs %>%
     filter(region == !!region) %>%
@@ -32,20 +61,38 @@ models.rf.predict.generic <- function(formula, obs, region, predictors, prior, p
     drop_na()
 
   # Define control parameters for training
-  control <- trainControl(method = "cv", number = 10) # Example: 10-fold cross-validation
+  control <- caret::trainControl(method = "cv", number = 10) # Example: 10-fold cross-validation
 
   # Train Random Forest Model using caret
   model <- caret::train(formula, data = data, method = "rf", trControl = control)
 
   # Export diagnostics
-  models.rf.diagnose(model=model, diagnostics_folder=diagnostics_folder, res=res, poll=poll, region=region,
-                     year=year)
+  models.rf.diagnose(
+    model = model,
+    diagnostics_folder = diagnostics_folder,
+    res = res,
+    poll = poll,
+    region = region,
+    year = year,
+    suffix = suffix
+  )
 
   # Predict
   pred <- raster::predict(predictors, model)
 
   # Remove far from urban
-  pred <- utils.mask_far_from_urban(r=pred, predictors=predictors, obs=obs)
+  if (limit_distance_urban) {
+    pred <- utils.mask_far_from_urban(
+      r = pred,
+      predictors = predictors, obs = obs,
+      quantile = distance_urban_quantile
+    )
+  }
+
+  # Remove sea salt contribution
+  if (remove_seasalt_dust_contribution & poll == "pm25") {
+    pred <- pred * (1 - predictors$pm25_ss_dust_frac)
+  }
 
   # Take prior where pred is NA
   pred[is.na(pred)] <- prior[is.na(pred)]
@@ -54,9 +101,20 @@ models.rf.predict.generic <- function(formula, obs, region, predictors, prior, p
   return(pred)
 }
 
-models.rf.diagnose <- function(model, diagnostics_folder, res, poll, region, year){
+
+models.rf.diagnose <- function(model, diagnostics_folder, res, poll, region, year, suffix) {
   dir.create(diagnostics_folder, recursive = T, showWarnings = F)
-  sink(file = glue("{diagnostics_folder}/rf_{res}_{poll}_{region}_{year}.txt"))
+
+  filepath <- models.rf.result_filepath(
+    poll = poll,
+    res = res,
+    year = year,
+    suffix = suffix,
+    folder = diagnostics_folder,
+    extension = "txt"
+    )
+
+  sink(file = filepath)
   print(model)
   print(summary(model))
   sink(file = NULL)
@@ -67,87 +125,100 @@ models.rf.diagnose <- function(model, diagnostics_folder, res, poll, region, yea
     head(20) %>%
     # add rownames as a column
     tibble::rownames_to_column("var") %>%
-    mutate(var=fct_reorder(var, IncNodePurity)) %>%
+    mutate(var = fct_reorder(var, IncNodePurity)) %>%
     ggplot() +
-    geom_col(aes(y=var, x=IncNodePurity)) -> plt
+    geom_col(aes(y = var, x = IncNodePurity)) -> plt
 
 
-  ggsave(glue("{diagnostics_folder}/rf_{res}_{poll}_{region}_{year}.png"), plt, width=10, height=10)
-}
-
-#' Mosaic/Average predictions of different regions
-#'
-#' @param preds
-#' @param error_relative_threshold
-#'
-#' @return
-#' @export
-#'
-#' @examples
-models.rf.combine_predictions <- function(preds, error_relative_threshold) {
-  # We assume there is no overlap
-  preds %>%
-    raster::stack() %>%
-    terra::rast() %>%
-    terra::app(mean, na.rm = T) %>%
-    raster()
+  ggsave(filepath %>% gsub("\\.txt", ".png", .), plt, width = 10, height = 10)
 }
 
 
-models.rf.predict.poll <- function(obs, predictors, regions, res, year, suffix, poll, formula, prior, use_cache=F, results_folder) {
+models.rf.result_filepath <- function(poll, res, year, suffix, folder, extension = "tif"){
+  glue("{folder}/{poll}_{res}_{year}{suffix}.{extension}")
+}
 
-  preds <- pblapply(names(regions), function(region) {
-    print(region)
 
-    f <- glue("cache/{MODEL_RF}/{poll}_pred_{res}_{region}_{year}{suffix}.tif")
-    dir.create(dirname(f), recursive = T, showWarnings = F)
+models.rf.predict.poll <- function(obs,
+                                   predictors,
+                                   regions,
+                                   res,
+                                   year,
+                                   suffix,
+                                   poll,
+                                   formula,
+                                   prior,
+                                   results_folder,
+                                   force_rebuild = T,
+                                   limit_distance_urban = T,
+                                   distance_urban_quantile = 0.95,
+                                   remove_seasalt_dust_contribution = T,
+                                   ...) {
 
-    if (use_cache & file.exists(f)) {
-      raster::stack(f) %>% `names<-`(c("predicted"))
-    } else {
-      tryCatch(
-        {
-          region_preds <- models.rf.predict.generic(
-            formula=formula,
+
+  # Check if file exists
+  filepath <- models.rf.result_filepath(
+    poll = poll,
+    res = res,
+    year = year,
+    suffix = suffix,
+    folder = results_folder
+  )
+
+  if(file.exists(filepath) & !force_rebuild){
+    return(raster::raster(filepath))
+  }
+
+  pred <- pblapply(names(regions), function(region) {
+    models.rf.predict.generic(
+            formula = formula,
             obs = obs %>% filter(poll == !!poll),
             region = region,
             predictors = predictors,
             poll = poll,
             res = res,
             prior = prior,
-            year=year
+            year = year,
+            suffix=suffix,
+            results_folder = results_folder,
+            limit_distance_urban = limit_distance_urban,
+            distance_urban_quantile = distance_urban_quantile,
+            remove_seasalt_dust_contribution = remove_seasalt_dust_contribution,
           )
-          writeRaster(region_preds, f, overwrite = T)
-          names(region_preds) <- c("predicted")
-          region_preds
-        },
-        error = function(e) {
-          warning("Failed to adjust for region ", region, ": ", e)
-          return(NA)
-        }
-      )
-    }
-  })
+  }) %>%
+    raster::stack() %>%
+    terra::rast() %>%
+    terra::app(mean, na.rm = T) %>%
+    raster() %>%
+    `names<-`("predicted")
 
-  # Mosaic/combine predictions
-  pred <- models.rf.combine_predictions(preds)
+  # Save
+  writeRaster(pred, filepath, overwrite = T)
 
-  mask <- predictors$distance_urban < quantile(obs$distance_urban, 0.95, na.rm = T) # 0.25 deg
-  mask[mask == 0] <- NA
-  pred <- pred %>%
-    raster::mask(mask) %>%
-    raster::mask(utils.to_raster(predictors$pop))
-
-  writeRaster(pred, glue("{results_folder}/{poll}_{res}_{year}{suffix}.tif"),
-    overwrite = T
+  # Write parameters in csv
+  params <- list(
+    "poll" = poll,
+    "res" = res,
+    "year" = year,
+    "suffix" = suffix,
+    "limit_distance_urban" = limit_distance_urban,
+    "distance_urban_quantile" = distance_urban_quantile,
+    "remove_seasalt_dust_contribution" = remove_seasalt_dust_contribution
   )
+  write.csv(params, file = filepath %>% gsub("\\.tif", ".csv", .))
 
   return(pred)
 }
 
 
-models.rf.predict.pm25 <- function(obs, predictors, regions, res, year, suffix, results_folder) {
-
+models.rf.predict.pm25 <- function(obs,
+                                   predictors,
+                                   regions, res, year, suffix, results_folder,
+                                   limit_distance_urban,
+                                   distance_urban_quantile,
+                                   remove_seasalt_dust_contribution,
+                                   force_rebuild,
+                                   ...) {
   pm25_formula <- value ~ pm25_prior + pm25_merra2_diff +
     gadm1 + distance_urban +
     srtm + srtm_diff05deg + srtm_05deg +
@@ -166,12 +237,20 @@ models.rf.predict.pm25 <- function(obs, predictors, regions, res, year, suffix, 
     suffix = suffix,
     poll = "pm25",
     prior = predictors$pm25_prior,
-    results_folder = results_folder
+    results_folder = results_folder,
+    force_rebuild=force_rebuild,
+    limit_distance_urban = limit_distance_urban,
+    distance_urban_quantile = distance_urban_quantile,
+    remove_seasalt_dust_contribution = remove_seasalt_dust_contribution
   )
 }
 
 
-models.rf.predict.no2 <- function(obs, predictors, regions, res, year, suffix, results_folder) {
+models.rf.predict.no2 <- function(obs, predictors, regions, res, year, suffix, results_folder,
+                                  limit_distance_urban,
+                                  distance_urban_quantile,
+                                  remove_seasalt_dust_contribution,
+                                  force_rebuild) {
   no2_formula <- value ~ no2_prior + no2_omi_diff + gadm1 + srtm + grump + distance_coast + pop_ratio_log
   obs$gadm1 <- as.factor(obs$gadm1) # Should be done beforehand
   models.rf.predict.poll(
@@ -184,6 +263,10 @@ models.rf.predict.no2 <- function(obs, predictors, regions, res, year, suffix, r
     suffix = suffix,
     poll = "no2",
     prior = predictors$no2_prior,
-    results_folder = results_folder
+    results_folder = results_folder,
+    force_rebuild=force_rebuild,
+    limit_distance_urban = limit_distance_urban,
+    distance_urban_quantile = distance_urban_quantile,
+    remove_seasalt_dust_contribution = remove_seasalt_dust_contribution
   )
 }
