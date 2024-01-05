@@ -6,6 +6,7 @@ build_map <- function(res,
                       year = 2022,
                       force_rebuild = T,
                       obs = NULL,
+                      obs_level = "city",
                       model = MODEL_GAM,
                       results_folder = file.path("results", model),
                       ...) {
@@ -13,7 +14,7 @@ build_map <- function(res,
   # Prepare data
   ###################################################
   # Get observations and predictors and these points
-  obs <- default_if_null(obs, data.get_obs(year = year, use_cache = T))
+  obs <- default_if_null(obs, data.get_obs(level = obs_level, year = year, use_cache = T))
   pop <- default_if_null(pop, data.pop(res=res, bb=get_bb(selected_regions)))
   # Given that predictors only rely on selected regions (for now), we use different suffix than for results
   suffix_predictors <- ifelse(is.null(selected_regions), "", paste(c("_",tolower(selected_regions)), collapse=""))
