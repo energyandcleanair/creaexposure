@@ -7,8 +7,8 @@ models.rf.predict <- function(obs,
                               suffix,
                               force_rebuild = T,
                               results_folder = "results/rf",
-                              remove_seasalt_dust_contribution = T,
-                              limit_distance_urban = T,
+                              remove_seasalt_dust_contribution = F,
+                              limit_distance_urban = F,
                               distance_urban_quantile = 0.95,
                               ...) {
 
@@ -67,23 +67,15 @@ models.rf.predict.generic <- function(formula,
   model <- caret::train(formula, data = data, method = "rf", trControl = control)
 
   # Export diagnostics
-  models.rf.diagnose(
-    model = model,
-    diagnostics_folder = diagnostics_folder,
-    res = res,
-    poll = poll,
-    region = region,
-    year = year,
-    suffix = suffix
-  )
 
   # Predict
-  pred <- raster::predict(predictors, model)
+  #TODO Understand why the raster predict != from vector predict (if they are)
+  pred_raster <- raster::predict(predictors, model)
 
   # Remove far from urban
   if (limit_distance_urban) {
-    pred <- utils.mask_far_from_urban(
-      r = pred,
+    pred_raster <- utils.mask_far_from_urban(
+      r = pred_raster,
       predictors = predictors, obs = obs,
       quantile = distance_urban_quantile
     )
@@ -91,18 +83,34 @@ models.rf.predict.generic <- function(formula,
 
   # Remove sea salt contribution
   if (remove_seasalt_dust_contribution & poll == "pm25") {
-    pred <- pred * (1 - predictors$pm25_ss_dust_frac)
+    pred_raster <- pred_raster * (1 - predictors$pm25_ss_dust_frac)
   }
 
   # Take prior where pred is NA
-  pred[is.na(pred)] <- prior[is.na(pred)]
+  pred_raster[is.na(pred_raster)] <- prior[is.na(pred_raster)]
+
+
+  # Diagnose post-transformations
+  models.rf.diagnose(
+    model = model,
+    diagnostics_folder = diagnostics_folder,
+    res = res,
+    poll = poll,
+    region = region,
+    year = year,
+    suffix = suffix,
+    obs = obs,
+    pred_raster = pred_raster
+  )
+
 
   # Return predictions
-  return(pred)
+  return(pred_raster)
 }
 
 
-models.rf.diagnose <- function(model, diagnostics_folder, res, poll, region, year, suffix) {
+models.rf.diagnose <- function(model, diagnostics_folder, res, poll, region, year, suffix, obs, pred_raster) {
+
   dir.create(diagnostics_folder, recursive = T, showWarnings = F)
 
   filepath <- models.rf.result_filepath(
@@ -129,8 +137,69 @@ models.rf.diagnose <- function(model, diagnostics_folder, res, poll, region, yea
     ggplot() +
     geom_col(aes(y = var, x = IncNodePurity)) -> plt
 
-
+  plt
   ggsave(filepath %>% gsub("\\.txt", ".png", .), plt, width = 10, height = 10)
+
+
+  # Predicted vs observed (before last transformations)
+  d_predicted <- predict(model, model$trainingData)
+  d_observed <- model$trainingData$.outcome
+  d_prior <- model$trainingData[,glue("{poll}_prior")]
+
+
+
+  get_perf_str <- function(d_predicted, d_observed){
+    n_pred <- sum(!is.na(d_predicted))
+    get_rsq <- function (x, y) cor(x, y, use="complete.obs") ^ 2
+    rsq <- get_rsq(d_observed, d_predicted)
+    mae <- Metrics::mae(
+      d_observed[!is.na(d_predicted)],
+      d_predicted[!is.na(d_predicted)])
+      glue("{n_pred} predicted values | R2 = {round(rsq,2)} | MAE = {round(mae,2)}")
+  }
+
+
+
+  bind_rows(
+    tibble(x=d_observed, y=d_predicted, type='predicted'),
+    tibble(x=d_observed, y=d_prior, type='prior'),
+  ) %>%
+  ggplot() +
+    geom_point(aes(x=x, y=y, col=type)) +
+    geom_abline(slope=1, intercept=0) +
+    labs(x='Observed',
+         y='Predicted | Prior',
+         title='Before post-transformations',
+         subtitle=get_perf_str(d_predicted, d_observed))
+
+  ggsave(filepath %>% gsub("\\.txt", "_scatter_before.png", .), width = 10, height = 10)
+
+
+  # Predicted vs observed (after last transformations)
+  obs_cn <- obs %>%
+    filter(country=='CN', source=='mee')
+
+  d_predicted <- obs_cn %>%
+    sf::st_as_sf() %>%
+    raster::extract(pred_raster, .)
+  d_observed <- obs_cn$value
+  d_prior <- obs_cn[,glue("{poll}_prior")]
+
+
+
+  bind_rows(
+    tibble(x=d_observed, y=d_predicted, type='predicted'),
+    # tibble(x=d_observed, y=d_prior, type='prior'),
+  ) %>%
+    ggplot() +
+    geom_point(aes(x=x, y=y, col=type)) +
+    geom_abline(slope=1, intercept=0) +
+    labs(x='Observed',
+         y='Predicted | Prior',
+         subtitle=get_perf_str(d_predicted, d_observed))
+
+  ggsave(filepath %>% gsub("\\.txt", "_scatter_after.png", .), width = 10, height = 10)
+
 }
 
 

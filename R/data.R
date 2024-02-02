@@ -4,18 +4,19 @@
 #' @export
 #'
 #' @examples
-data.get_obs <- function(polls=c("pm25","no2"), year=2020, use_cache=T){
+data.get_obs <- function(level = "city", polls=c("pm25","no2"), year=2020, use_cache=T){
 
-  f <- sprintf("cache/obs_%s_%s.RDS", year, paste(polls, collapse="_"))
+  f <- glue("cache/obs_{level}_{year}_{paste(polls, collapse='_')}.RDS")
   dir.create(dirname(f), F, T)
   if(file.exists(f) && use_cache){
     return(readRDS(f))
   }else{
     min_measurements <- 365 * 0.8
+    process_id <- dplyr::recode(level, "city"="city_day_mad", "station"="station_day_mad")
     obs <- rcrea::measurements(poll=c("pm10","pm25","no2"),
                                with_geometry = T,
                                with_metadata = T,
-                               process_id="city_day_mad",
+                               process_id = process_id,
                                collect=F,
                                date_from=paste0(year, "-01-01"),
                                date_to=paste0(year, "-12-31")) %>%
@@ -145,7 +146,7 @@ data.predictors <- function(pop, res, year, use_cache=T, suffix=""){
 
 
 data.basemap_pm25_year <- function(year){
-  basemap_years <- seq(2018, 2021)
+  basemap_years <- seq(2018, 2022)
   basemap_year <- max(basemap_years[basemap_years<=year])
   return(basemap_year)
 }
@@ -159,16 +160,7 @@ data.basemap_pm25 <- function(pop, res, year=2020, use_cache=T, suffix=""){
   if(file.exists(f) && use_cache){
     terra::rast(f)
   }else{
-    # pm25_china <- data.basemap_pm25_region("China", year=basemap_year) %>% terra::resample(pop, method='bilinear')
-    # pm25_eur <- data.basemap_pm25_region("Europe", year=basemap_year) %>% terra::resample(pop, method='bilinear')
-    # pm25_usa <- data.basemap_pm25_region("NorthAmerica", year=basemap_year) %>% terra::resample(pop, method='bilinear')
-    # pm25_asia <- data.basemap_pm25_region("Asia", year=basemap_year) %>% terra::resample(pop, method='bilinear')
-    pm25_global <- data.basemap_pm25_region("Global", year=basemap_year) %>% terra::resample(pop, method='bilinear')
-
-    # pm25_stack <- terra::sprc(pm25_china, pm25_eur, pm25_usa, pm25_asia)
-    # pm25 <- terra::merge(pm25_stack, first=TRUE, filename=f, overwrite=T)
-
-    pm25 <- pm25_global
+    pm25 <- data.basemap_pm25_region("Global", year=basemap_year) %>% terra::resample(pop, method='bilinear')
     terra::writeRaster(pm25, filename = f, overwrite = T)
     return(pm25)
   }
@@ -176,35 +168,8 @@ data.basemap_pm25 <- function(pop, res, year=2020, use_cache=T, suffix=""){
 
 data.basemap_pm25_region <- function(region, year=2020){
 
-  # region_fs <- list(
-  #   `2018` = list(
-  #     "NorthAmerica" = "V4NA03_PM25_NA_201801_201812-RH35.nc",
-  #     "Europe" = "V4EU03_PM25_EU_201801_201812-RH35.nc",
-  #     "China" = "V4CH03_PM25_CHi_201801_201812-RH35.nc",
-  #     "Global" = "ACAG_PM25_GWR_V4GL03_201801_201812_0p01.tif"
-  #   ),
-  #   `2020` = list(
-  #     "Asia" = "V5GL02.HybridPM25.Asia.202001-202012.nc",
-  #     "Europe" = "V5GL02.HybridPM25.Europe.202001-202012.nc",
-  #     "Global" = "V5GL02.HybridPM25.Global.202001-202012.nc",
-  #     "China" = "V5GL02.HybridPM25.China.202001-202012.nc",
-  #     "NorthAmerica" = "V5GL02.HybridPM25.NorthAmerica.202001-202012.nc"
-  #   )
-  # )
-  #
-  # if(!year %in% names(region_fs)){
-  #   stop("Year should be among ", paste(names(region_fs), collapse=", "))
-  # }
-  #
-  # if(!region %in% names(region_fs[[as.character(year)]])){
-  #   stop("Region should be among ", paste(names(region_fs[[as.character(year)]]), collapse=", "))
-  # }
-
-
-  # f_pm25_nc <- region_fs[[as.character(year)]][[region]]
-
   if(region != "Global") stop("Now we only use Global from now on")
-  f_pm25_nc <- glue("V5GL03.HybridPM25.Global.{year}01-{year}12.nc")
+  f_pm25_nc <- glue("V5GL04.HybridPM25.Global.{year}01-{year}12.nc")
   f_pm25_tif <- gsub("\\.nc","\\.tif", f_pm25_nc)
 
   nc_to_tif <- function(f_pm25_nc, f_pm25_tif){

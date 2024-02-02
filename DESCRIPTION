@@ -21,7 +21,8 @@ Imports:
     pbapply,
     glue,
     caret,
-    randomForest
+    randomForest,
+    forcats
 Depends:
     ggplot2
 Remotes:

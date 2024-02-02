@@ -23,10 +23,13 @@ a <- get_exposure_map(year=2020,
 
 
 
-aqexposuremap::build_map(res=aqexposuremap::RES_2PT5_MIN,
+map_cn <- aqexposuremap::build_map(res=aqexposuremap::RES_2PT5_MIN,
                          suffix="_china",
                          selected_regions = "CN",
-                         year=2020,
+                         year=2023,
+                         remove_seasalt_dust_contribution = F,
+                         limit_distance_urban = F,
+                         obs_level = "station",
                          model=MODEL_RF)
 
 # Build more accurate version for certain countries --------------------------------------

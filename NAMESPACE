@@ -35,6 +35,8 @@ importFrom(dplyr,tibble)
 importFrom(dplyr,ungroup)
 importFrom(dplyr,vars)
 
+importFrom(forcats,fct_reorder)
+
 importFrom(glue,glue)
 
 
