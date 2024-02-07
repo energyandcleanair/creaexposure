@@ -612,28 +612,40 @@ data.road_density_grip <- function(res, pop, use_cache=T, suffix=""){
 
 data.distance_urban <- function(pop, res, use_cache=T, suffix=""){
 
-  f <- file.path("cache", paste0("distance_urban_",res,suffix,".tif"))
+  f <- file.path("cache", paste0("distance_urban_",res, suffix,".tif"))
 
   if(!use_cache | !file.exists(f)){
 
-    # Too slow
-    # grump <- data.grump(pop, res)
-    # sea_level <- 0
-    # rural_level <- 1
-    # urban_level <- 2
-    #
-    # # Avoid computing distance in sea
-    # grump[grump==sea_level] <- -1
-    # grump[grump==rural_level] <- NA
-    # dist <- terra::distance(grump)
-    # dist[is.na(pop)] <- NA
-    # dist[dist==-1] <- NA
-    # raster::writeRaster(dist, f, overwrite=T)
+    f_gis <- creahelpers::get_landcover_path(glue("grumpv1/distance_urban_{res}.tif"))
+    if(!file.exists(f_gis)){
+      # Generate a global one first
+      # Very slow though
+      warning(glue("Generating {basename(f_gis)}. It might take quite some time..."))
 
-    # We generated it using QGIS
-    dist <- terra::rast(creahelpers::get_landcover_path("grumpv1/distance_urban_2pt5_min.tif")) %>%
+      pop_all <- data.pop(res=res)
+      # distance doesn't work at 30sec res, we do as best as we can....
+      pop_2pt5_min <- data.pop(res=RES_2PT5_MIN)
+      grump <- terra::rast(creahelpers::get_population_path('glurextents.bil'))
+      # Resample using max to keep urban areas
+      grump <- grump %>% terra::resample(pop_2pt5_min, method="max")
+
+      # Compute distance
+      sea_level <- 0
+      rural_level <- 1
+      urban_level <- 2
+      grump[is.na(pop_2pt5_min)] <- NA
+
+      dir.create(dirname(f_gis), showWarnings = F, recursive = T)
+      dist <- terra::gridDist(grump, target=urban_level)
+
+      dist_res <- dist %>% terra::resample(pop_all, method='bilinear')
+      terra::writeRaster(dist_res, f_gis, overwrite=T)
+    }
+
+    dist <- terra::rast(f_gis) %>%
       terra::resample(pop) %>%
       terra::mask(pop)
+
     raster::writeRaster(dist, f, overwrite=T)
   }else{
     dist <- terra::rast(f)
