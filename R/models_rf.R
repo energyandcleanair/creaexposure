@@ -155,7 +155,7 @@ models.rf.diagnose <- function(model, diagnostics_folder, res, poll, region, yea
     mae <- Metrics::mae(
       d_observed[!is.na(d_predicted)],
       d_predicted[!is.na(d_predicted)])
-      glue("{n_pred} predicted values | R2 = {round(rsq,2)} | MAE = {round(mae,2)}")
+      glue("{n_pred} predicted values | R2 = {round(rsq,2)} | MAE = {round(mae,2)}\nCross-validation R2 = {round(model$results[model$results$mtry==model$bestTune$mtry,'Rsquared'],2)}")
   }
 
 
@@ -176,14 +176,14 @@ models.rf.diagnose <- function(model, diagnostics_folder, res, poll, region, yea
 
 
   # Predicted vs observed (after last transformations)
-  obs_cn <- obs %>%
-    filter(country=='CN', source=='mee')
+  # obs_cn <- obs %>%
+  #   filter(country=='CN', source=='mee')
 
-  d_predicted <- obs_cn %>%
+  d_predicted <- obs %>%
     sf::st_as_sf() %>%
     raster::extract(pred_raster, .)
-  d_observed <- obs_cn$value
-  d_prior <- obs_cn[,glue("{poll}_prior")]
+  d_observed <- obs$value
+  d_prior <- obs[,glue("{poll}_prior")]
 
 
 
