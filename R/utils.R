@@ -147,7 +147,7 @@ utils.get_data_file <- function(filename, data_folder="inst/extdata"){
     path <- file.path(data_folder, filename)
   }else{
     # look into installed package
-    path <- system.file(gsub("inst/","",data_folder), filename, package = "aqexposuremap")
+    path <- system.file(gsub("inst/","",data_folder), filename, package = "creaexposure")
   }
 
   if(!file.exists(path) | (path=="")){

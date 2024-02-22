@@ -12,9 +12,28 @@
 #   adjust_global(pop, res, poll=c("pm25", "no2"), year=year)
 # })
 
+map_in <- creaexposure::build_map(res=creaexposure::RES_2PT5_MIN,
+                                   suffix="_india",
+                                   selected_regions = "IN",
+                                   year=2022,
+                                   remove_seasalt_dust_contribution = F,
+                                   limit_distance_urban = F,
+                                   obs_level = "station",
+                                   model=MODEL_RF)
+
+
+
+map_in <- creaexposure::build_map(res=creaexposure::RES_30_SEC,
+                                   suffix="_india",
+                                   selected_regions = "IN",
+                                   year=2022,
+                                   remove_seasalt_dust_contribution = F,
+                                   limit_distance_urban = F,
+                                   obs_level = "station",
+                                   model=MODEL_RF)
 
 a <- get_exposure_map(year=2020,
-                 res=aqexposuremap::RES_2PT5_MIN,
+                 res=creaexposure::RES_2PT5_MIN,
                  model="rf",
                  limit_distance_urban=T,
                  remove_seasalt_dust_contribution=T,
@@ -23,7 +42,7 @@ a <- get_exposure_map(year=2020,
 
 
 
-map_cn <- aqexposuremap::build_map(res=aqexposuremap::RES_2PT5_MIN,
+map_cn <- creaexposure::build_map(res=creaexposure::RES_2PT5_MIN,
                          suffix="_china",
                          selected_regions = "CN",
                          year=2023,
@@ -35,7 +54,7 @@ map_cn <- aqexposuremap::build_map(res=aqexposuremap::RES_2PT5_MIN,
 # Build more accurate version for certain countries --------------------------------------
 
 lapply(seq(2020, 2023), function(year){
-  aqexposuremap::build_map(res=aqexposuremap::RES_30_SEC,
+  creaexposure::build_map(res=creaexposure::RES_30_SEC,
                                suffix="_china",
                                selected_regions = "CN",
                                year=year,
@@ -43,7 +62,7 @@ lapply(seq(2020, 2023), function(year){
 })
 
 lapply(seq(2020, 2023), function(year){
-  aqexposuremap::build_map(res=aqexposuremap::RES_2PT5_MIN,
+  creaexposure::build_map(res=creaexposure::RES_2PT5_MIN,
                                suffix="_china",
                                selected_regions = "CN",
                                year=year,
@@ -52,10 +71,10 @@ lapply(seq(2020, 2023), function(year){
 
 
 
-aqexposuremap::adjust_country("30_sec", "_india", "IND", "IN", 2018)
-aqexposuremap::adjust_country("30_sec", "_india", "IND", "IN", 2022)
+creaexposure::adjust_country("30_sec", "_india", "IND", "IN", 2018)
+creaexposure::adjust_country("30_sec", "_india", "IND", "IN", 2022)
 
-aqexposuremap::adjust_country("30_sec", "_philippines", "PHL", "PH", 2018)
-aqexposuremap::adjust_country("30_sec", "_philippines", "PHL", "PH", 2022)
+creaexposure::adjust_country("30_sec", "_philippines", "PHL", "PH", 2018)
+creaexposure::adjust_country("30_sec", "_philippines", "PHL", "PH", 2022)
 
-aqexposuremap::adjust_country("30_sec", "_china", "CHN", "CN", 2020)
+creaexposure::adjust_country("30_sec", "_china", "CHN", "CN", 2020)

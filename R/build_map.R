@@ -10,6 +10,9 @@ build_map <- function(res,
                       model = MODEL_GAM,
                       results_folder = file.path("results", model),
                       ...) {
+
+  logger::log_layout(creahelpers::log_layout_crea)
+
   ###################################################
   # Prepare data
   ###################################################

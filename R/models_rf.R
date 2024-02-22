@@ -235,6 +235,7 @@ models.rf.predict.poll <- function(obs,
   )
 
   if(file.exists(filepath) & !force_rebuild){
+    logger::log_info(glue("File {filepath} already exists. Returning it."))
     return(raster::raster(filepath))
   }
 
@@ -262,6 +263,7 @@ models.rf.predict.poll <- function(obs,
     `names<-`("predicted")
 
   # Save
+  logger::log_success(glue("Writing predicted map to {filepath}"))
   writeRaster(pred, filepath, overwrite = T)
 
   # Write parameters in csv

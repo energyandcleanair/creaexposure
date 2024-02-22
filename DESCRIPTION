@@ -1,4 +1,4 @@
-Package: aqexposuremap
+Package: creaexposure
 Type: Package
 Title: Building exposure map
 Version: 0.2.0
@@ -22,7 +22,8 @@ Imports:
     glue,
     caret,
     randomForest,
-    forcats
+    forcats,
+    logger
 Depends:
     ggplot2
 Remotes:
