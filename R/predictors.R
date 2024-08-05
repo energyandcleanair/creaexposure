@@ -252,17 +252,17 @@ data.mask <- function(){
   m[m$GID_0=="PHL",]
 }
 
-data.bb <- function(){
+data.bbox <- function(){
   data.gadm0() %>%
     subset(GID_0 %in% c('PHL')) %>% extent %>% multiply_by(1.1)
 }
 
-data.pop <- function(res="30_sec", bb=NULL, mask=NULL){
+data.pop <- function(res="30_sec", bbox=NULL, mask=NULL){
   r <- terra::rast(creahelpers::get_population_path(
     paste0('gpw_v4_population_density_adjusted_to_2015_unwpp_country_totals_rev11_2020_',res,'.tif')))
 
-  if(!is.null(bb)){
-    r <- r %>% terra::crop(bb)
+  if(!is.null(bbox)){
+    r <- r %>% terra::crop(bbox)
   }
 
   if(!is.null(mask)){

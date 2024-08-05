@@ -164,7 +164,6 @@ models.gam.predict.pm25 <- function(obs, predictors, regions, res, year, suffix,
   pm25_formulas <- list(
     "CN" = diff_pm25 ~ s(pm25_prior, k = 3) + s(pm25_merra2_diff, k = 3) + s(distance_urban, k = 3) + s(lon, lat) + gadm1,
     "IN" = diff_pm25 ~ s(pm25_prior, k = 3) + s(pm25_ss_dust_frac) + s(lon, lat) + s(no2_prior),
-    "BD" = diff_pm25 ~ s(pm25_prior, k = 3) + s(pm25_ss_dust_frac) + s(lon, lat) + s(no2_prior),
     "NA" = diff_pm25 ~ s(srtm, k = 4) + s(pm25_prior, k = 3) + s(no2_prior) + s(lon, lat),
     "SEA" = diff_pm25 ~ s(pop_ratio_log, k = 3),
     "EU" = diff_pm25 ~ diff_pm25 ~ s(pop, k = 3) + s(distance_coast, k = 3) +
@@ -174,16 +173,18 @@ models.gam.predict.pm25 <- function(obs, predictors, regions, res, year, suffix,
     "ZA" = diff_pm25 ~ s(distance_coast) + s(pm25_prior),
     "PH" = diff_pm25 ~ s(pm25_prior, k = 3) + grump + s(lon, lat),
     "TW" = diff_pm25 ~ s(lon, lat),
-    "CL" = diff_pm25 ~ s(lon, lat) + grump
+    "CL" = diff_pm25 ~ s(lon, lat) + grump,
+    "default" = diff_pm25 ~ s(pm25_prior, k = 3) + s(pm25_ss_dust_frac) + s(lon, lat) + s(no2_prior)
   )
 
-  pm25_preds <- pblapply(names(regions), function(region) {
+  pm25_preds <- pblapply(get_region_names(regions), function(region) {
       tryCatch(
         {
+          formula <- default_if_null(pm25_formulas[[region]], pm25_formulas[["default"]])
           region_preds <- models.gam.predict.generic(
             obs_global = obs_pm25,
             region = region,
-            formula = pm25_formulas[[region]],
+            formula = formula,
             predictors = predictors,
             poll = "pm25",
             res = res,
@@ -257,10 +258,11 @@ models.gam.predict.no2 <- function(obs, predictors, regions, res, year, suffix, 
     "JP" = diff_no2 ~ s(no2_prior, k = 3) + s(pop_ratio_log, k = 3),
     "ZA" = diff_no2 ~ s(pop_ratio_log, k = 3),
     "TW" = diff_no2 ~ s(no2_prior, k = 3) + s(distance_urban, k = 3),
-    "CL" = diff_no2 ~ s(distance_urban, k = 3)
+    "CL" = diff_no2 ~ s(distance_urban, k = 3),
+    "default" = diff_no2 ~ s(lon, lat) + s(no2_prior, k = 3),
   )
 
-  no2_preds <- pblapply(names(regions), function(region) {
+  no2_preds <- pblapply(get_region_names(regions), function(region) {
     print(region)
 
     f <- glue("cache/{MODEL_GAM}/no2_pred_{res}_{region}_{year}{suffix}.tif")
@@ -271,10 +273,11 @@ models.gam.predict.no2 <- function(obs, predictors, regions, res, year, suffix, 
     } else {
       tryCatch(
         {
+          formula <- default_if_null(no2_formulas[[region]], no2_formulas[["default"]])
           region_preds <- models.gam.predict.generic(
             obs_global = obs_no2,
             region = region,
-            formula = no2_formulas[[region]],
+            formula = formula,
             predictors = predictors,
             poll = "no2",
             res = res,

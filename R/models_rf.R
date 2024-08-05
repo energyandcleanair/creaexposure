@@ -148,7 +148,6 @@ models.rf.diagnose <- function(model, diagnostics_folder, res, poll, region, yea
   d_prior <- model$trainingData[,glue("{poll}_prior")]
 
 
-
   get_perf_str <- function(d_predicted, d_observed){
     n_pred <- sum(!is.na(d_predicted))
     get_rsq <- function (x, y) cor(x, y, use="complete.obs") ^ 2
@@ -169,7 +168,7 @@ models.rf.diagnose <- function(model, diagnostics_folder, res, poll, region, yea
     geom_point(aes(x=x, y=y, col=type)) +
     geom_abline(slope=1, intercept=0) +
     labs(x='Observed',
-         y='Predicted | Prior',
+         y='Predicted or Prior',
          title='Before post-transformations',
          subtitle=get_perf_str(d_predicted, d_observed))
 
@@ -190,14 +189,16 @@ models.rf.diagnose <- function(model, diagnostics_folder, res, poll, region, yea
 
   bind_rows(
     tibble(x=d_observed, y=d_predicted, type='predicted'),
-    # tibble(x=d_observed, y=d_prior, type='prior'),
+    tibble(x=d_observed, y=d_prior, type='prior'),
   ) %>%
     ggplot() +
     geom_point(aes(x=x, y=y, col=type)) +
     geom_abline(slope=1, intercept=0) +
     labs(x='Observed',
          y='Predicted | Prior',
-         subtitle=get_perf_str(d_predicted, d_observed))
+         subtitle=get_perf_str(d_predicted, d_observed)) +
+    facet_wrap(~type) +
+    coord_equal()
 
   ggsave(filepath %>% gsub("\\.txt", "_scatter_after.png", .), width = 10, height = 10)
 

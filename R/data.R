@@ -1,5 +1,5 @@
-get_grid <- function(res, use_terra=T, bb=NULL){
-  pop <- data.pop(res=res, bb=bb)
+get_grid <- function(res, use_terra=T, bbox=NULL){
+  pop <- data.pop(res=res, bbox=bbox)
   if(use_terra){
     return(terra::rast(creahelpers::to_rast(pop)))
   }else{
