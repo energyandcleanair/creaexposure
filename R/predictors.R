@@ -86,9 +86,9 @@ data.predictors <- function(pop, res, year, use_cache=T, suffix=""){
 
   pm25_merra2_diff <- data.pm25_merra2_diff(pop, res,
                                        year_i=data.basemap_pm25_year(year),
-                                       year_f=min(year,2023),
+                                       year_f=year,
                                        use_cache=use_cache, suffix=suffix)
-  no2_omi_diff <- data.no2_omi_diff(pop, res, year_f=min(year,2022), use_cache=use_cache, suffix=suffix)
+  no2_omi_diff <- data.no2_omi_diff(pop, res, year_f=year, use_cache=use_cache, suffix=suffix)
   pop_ratio_log <- data.pop_ratio_log(pop, res, use_cache=use_cache, suffix=suffix)
   srtm <- data.srtm(pop, res, use_cache=use_cache, suffix=suffix)
   srtm_05deg <- utils.focal_mean(srtm, d_deg=0.5, pop=pop, res=res, use_cache=use_cache, suffix=suffix)
@@ -145,7 +145,22 @@ data.predictors <- function(pop, res, year, use_cache=T, suffix=""){
 }
 
 
+#' Find the closest year for pm2.5
+#'
+#' @param year either the year integer, or mid2023mid2024 if from July to June
+#'
+#' @return
+#' @export
+#'
+#' @examples
 data.basemap_pm25_year <- function(year){
+
+  if(str_detect(year, "^mid\\d{4}mid\\d{4}$")){
+    year <- as.numeric(str_match(year, "mid(\\d{4})mid")[2])
+  }else{
+    year <- as.numeric(year)
+  }
+
   basemap_years <- seq(2018, 2022)
   basemap_year <- max(basemap_years[basemap_years<=year])
   return(basemap_year)
@@ -165,6 +180,7 @@ data.basemap_pm25 <- function(pop, res, year=2020, use_cache=T, suffix=""){
     return(pm25)
   }
 }
+
 
 data.basemap_pm25_region <- function(region, year=2020){
 
@@ -333,14 +349,14 @@ data.lat <- function(pop, res, use_cache=T, suffix=""){
 
 data.pm25_merra2_diff <- function(pop, res, year_i=2020, year_f=2020, use_cache=T, suffix=""){
 
-  f <- file.path("cache", sprintf("pm25_merra2_diff_%d_%d_%s%s.tif", year_i, year_f, res, suffix))
+  f <- file.path("cache", sprintf("pm25_merra2_diff_%s_%s_%s%s.tif", year_i, year_f, res, suffix))
 
   if(!use_cache | !file.exists(f)){
 
-    pm25_merra2_i <- terra::rast(creahelpers::get_concentration_path(sprintf("pm25_merra2_%d.tif", year_i))) %>%
+    pm25_merra2_i <- terra::rast(creahelpers::get_concentration_path(sprintf("pm25_merra2_%s.tif", year_i))) %>%
       terra::resample(pop) %>% terra::mask(pop)
 
-    pm25_merra2_f <- terra::rast(creahelpers::get_concentration_path(sprintf("pm25_merra2_%d.tif", year_f))) %>%
+    pm25_merra2_f <- terra::rast(creahelpers::get_concentration_path(sprintf("pm25_merra2_%s.tif", year_f))) %>%
       terra::resample(pop) %>% terra::mask(pop)
 
     pm25_merra2_diff <- pm25_merra2_f - pm25_merra2_i
@@ -354,15 +370,14 @@ data.pm25_merra2_diff <- function(pop, res, year_i=2020, year_f=2020, use_cache=
 
 data.no2_omi_diff <- function(pop, res, year_i=2011, year_f=2019, use_cache=T, suffix=""){
 
-
-  f <- file.path("cache", sprintf("no2_omi_diff_%d_%d_%s%s.tif",year_i, year_f, res, suffix))
+  f <- file.path("cache", sprintf("no2_omi_diff_%s_%s_%s%s.tif",year_i, year_f, res, suffix))
 
   if(!use_cache | !file.exists(f)){
 
-    omi_i <- terra::rast(creahelpers::get_concentration_path(sprintf("no2_omi_%d.tif", year_i))) %>%
+    omi_i <- terra::rast(creahelpers::get_concentration_path(sprintf("no2_omi_%s.tif", year_i))) %>%
       terra::resample(pop) %>% terra::mask(pop)
 
-    omi_f <- terra::rast(creahelpers::get_concentration_path(sprintf("no2_omi_%d.tif", year_f))) %>%
+    omi_f <- terra::rast(creahelpers::get_concentration_path(sprintf("no2_omi_%s.tif", year_f))) %>%
       terra::resample(pop) %>% terra::mask(pop)
 
     no2_omi_diff <- omi_f - omi_i

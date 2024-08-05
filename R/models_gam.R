@@ -164,6 +164,7 @@ models.gam.predict.pm25 <- function(obs, predictors, regions, res, year, suffix,
   pm25_formulas <- list(
     "CN" = diff_pm25 ~ s(pm25_prior, k = 3) + s(pm25_merra2_diff, k = 3) + s(distance_urban, k = 3) + s(lon, lat) + gadm1,
     "IN" = diff_pm25 ~ s(pm25_prior, k = 3) + s(pm25_ss_dust_frac) + s(lon, lat) + s(no2_prior),
+    "BD" = diff_pm25 ~ s(pm25_prior, k = 3) + s(pm25_ss_dust_frac) + s(lon, lat) + s(no2_prior),
     "NA" = diff_pm25 ~ s(srtm, k = 4) + s(pm25_prior, k = 3) + s(no2_prior) + s(lon, lat),
     "SEA" = diff_pm25 ~ s(pop_ratio_log, k = 3),
     "EU" = diff_pm25 ~ diff_pm25 ~ s(pop, k = 3) + s(distance_coast, k = 3) +

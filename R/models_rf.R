@@ -76,7 +76,8 @@ models.rf.predict.generic <- function(formula,
   if (limit_distance_urban) {
     pred_raster <- utils.mask_far_from_urban(
       r = pred_raster,
-      predictors = predictors, obs = obs,
+      predictors = predictors,
+      obs = obs,
       quantile = distance_urban_quantile
     )
   }

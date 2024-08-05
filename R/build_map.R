@@ -9,6 +9,7 @@ build_map <- function(res,
                       obs_level = "city",
                       model = MODEL_GAM,
                       results_folder = file.path("results", model),
+                      diagnostics_folder = "diagnostics",
                       ...) {
 
   logger::log_layout(creahelpers::log_layout_crea)
@@ -22,17 +23,11 @@ build_map <- function(res,
   # Given that predictors only rely on selected regions (for now), we use different suffix than for results
   suffix_predictors <- ifelse(is.null(selected_regions), "", paste(c("_",tolower(selected_regions)), collapse=""))
   predictors <- data.predictors(pop, res, year = year, suffix = suffix_predictors, use_cache = T)
-  obs <- utils.add_predictors(obs, predictors)
+  obs_w_predictors <- utils.add_predictors(obs, predictors)
+  diagnose_obs_w_predictors(obs_w_predictors, suffix = suffix, folder = diagnostics_folder)
 
   regions <- get_regions(selected_regions = selected_regions)
-  obs <- add_region_to_obs(obs, regions)
-
-  # Visual check if some important countries haven't been covered
-  # obs %>%  filter(poll=="pm25") %>%
-  #   group_by(country, region) %>% summarise(count=n()) %>%
-  #   mutate(name=countrycode(country, "iso2c", "country.name")) %>%
-  #   arrange(desc(count)) %>%
-  #   View()
+  obs_w_predictors <- add_region_to_obs(obs_w_predictors, regions)
 
 
   result <- list()
@@ -44,7 +39,7 @@ build_map <- function(res,
                    year=year,
                    suffix=suffix,
                    predictors=predictors,
-                   obs=obs,
+                   obs=obs_w_predictors,
                    results_folder=results_folder,
                    force_rebuild=force_rebuild,
                    ...) -> result[[poll]]
