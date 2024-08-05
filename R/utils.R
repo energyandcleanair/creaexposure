@@ -170,7 +170,7 @@ utils.get_data_file <- function(filename, data_folder="inst/extdata"){
 #'
 #' @examples
 utils.mask_far_from_urban <- function(r, predictors, obs, quantile=0.95){
-  mask <- predictors$distance_urban < quantile(obs$distance_urban, quantile, na.rm = T)
+  mask <- predictors$distance_urban <= quantile(obs$distance_urban, quantile, na.rm = T)
   mask[mask == 0] <- NA
   r %>%
     raster::mask(mask)

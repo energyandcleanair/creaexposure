@@ -16,7 +16,8 @@ get_regions <- function(selected_regions=NULL){
       "PH" = "PH",
       "TW" = "TW",
       "CL" = "CL",
-      "AU" = "AU"
+      "AU" = "AU",
+      "BD" = "BD"
     )
 
     if (!is.null(selected_regions)) {
