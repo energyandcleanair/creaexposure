@@ -175,7 +175,8 @@ data.basemap_pm25 <- function(pop, res, year=2020, use_cache=T, suffix=""){
   if(file.exists(f) && use_cache){
     terra::rast(f)
   }else{
-    pm25 <- data.basemap_pm25_region("Global", year=basemap_year) %>% terra::resample(pop, method='bilinear')
+    pm25 <- data.basemap_pm25_region("Global", year=basemap_year) %>%
+      terra::resample(pop, method='bilinear')
     terra::writeRaster(pm25, filename = f, overwrite = T)
     return(pm25)
   }
