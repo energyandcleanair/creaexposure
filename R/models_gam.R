@@ -174,13 +174,13 @@ models.gam.predict.pm25 <- function(obs, predictors, regions, res, year, suffix,
     "PH" = diff_pm25 ~ s(pm25_prior, k = 3) + grump + s(lon, lat),
     "TW" = diff_pm25 ~ s(lon, lat),
     "CL" = diff_pm25 ~ s(lon, lat) + grump,
-    "default" = diff_pm25 ~ s(pm25_prior, k = 3) + s(pm25_ss_dust_frac) + s(lon, lat) + s(no2_prior)
+    "default" = diff_pm25 ~ s(pm25_prior, k = 3) + s(pm25_merra2_diff, k = 3) + s(distance_urban, k = 3) + s(lon, lat)
   )
 
   pm25_preds <- pblapply(get_region_names(regions), function(region) {
       tryCatch(
         {
-          formula <- default_if_null(pm25_formulas[[region]], pm25_formulas[["default"]])
+          formula <- default_if_null(pm25_formulas[[get_region_names(region)]], pm25_formulas[["default"]])
           region_preds <- models.gam.predict.generic(
             obs_global = obs_pm25,
             region = region,
@@ -209,18 +209,18 @@ models.gam.predict.pm25 <- function(obs, predictors, regions, res, year, suffix,
     quantile = 0.95
   )
 
-  pm25 <- raster::calc(raster::stack(list(pm25_diff, predictors$pm25_prior)), sum, na.rm = T) %>%
-    raster::mask(creahelpers::to_raster(predictors$pop))
-
   # Remove far from urban
   if (limit_distance_urban) {
-    pm25 <- utils.mask_far_from_urban(
-      r = pm25,
+    pm25_diff <- utils.mask_far_from_urban(
+      r = pm25_diff,
       predictors = predictors,
       obs = obs,
       quantile = distance_urban_quantile
     )
   }
+
+  pm25 <- raster::calc(raster::stack(list(pm25_diff, predictors$pm25_prior)), sum, na.rm = T) %>%
+    raster::mask(creahelpers::to_raster(predictors$pop))
 
   # Remove sea salt contribution
   if (remove_seasalt_dust_contribution) {
@@ -273,7 +273,7 @@ models.gam.predict.no2 <- function(obs, predictors, regions, res, year, suffix, 
     } else {
       tryCatch(
         {
-          formula <- default_if_null(no2_formulas[[region]], no2_formulas[["default"]])
+          formula <- default_if_null(no2_formulas[[get_region_name(region)]], no2_formulas[["default"]])
           region_preds <- models.gam.predict.generic(
             obs_global = obs_no2,
             region = region,
