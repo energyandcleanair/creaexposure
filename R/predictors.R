@@ -161,7 +161,7 @@ data.basemap_pm25_year <- function(year){
     year <- as.numeric(year)
   }
 
-  basemap_years <- seq(2018, 2022)
+  basemap_years <- seq(2015, 2022)
   basemap_year <- max(basemap_years[basemap_years<=year])
   return(basemap_year)
 }
@@ -192,13 +192,14 @@ data.basemap_pm25_region <- function(region, year=2020){
   nc_to_tif <- function(f_pm25_nc, f_pm25_tif){
     pm25.base <- raster::raster(creahelpers::get_concentration_path(f_pm25_nc))
 
-    if(region=="Global" & year==2018){
-      # For some reason the Global dataset is flipped
-      pm25.base <- pm25.base %>%
-        raster::t() %>% # nc dimensions aren't in raster expected order I suppose
-        raster::flip(direction="y") %>%
-        raster::flip(direction="x")
-    }
+    # Not twisted anymore!
+    # if(region=="Global" & year==2018){
+    #   # For some reason the Global dataset is flipped
+    #   pm25.base <- pm25.base %>%
+    #     raster::t() %>% # nc dimensions aren't in raster expected order I suppose
+    #     raster::flip(direction="y") %>%
+    #     raster::flip(direction="x")
+    # }
 
     raster::writeRaster(pm25.base,
                         creahelpers::get_concentration_path(f_pm25_tif),
