@@ -5,6 +5,7 @@ build_map <- function(res,
                       regions = NULL,
                       year = 2022,
                       force_rebuild = T,
+                      use_cache_predictors = T,
                       obs = NULL,
                       obs_level = "city",
                       model = MODEL_GAM,
@@ -23,7 +24,7 @@ build_map <- function(res,
   pop <- default_if_null(pop, data.pop(res=res, bbox=bbox))
   # Given that predictors only rely on selected regions (for now), we use different suffix than for results
   suffix_predictors <- ifelse(is.null(regions), "", paste(c("_",tolower(get_region_names(regions))), collapse=""))
-  predictors <- data.predictors(pop, res, year = year, suffix = suffix_predictors, use_cache = T)
+  predictors <- data.predictors(pop, res, year=year, suffix=suffix_predictors, use_cache=use_cache_predictors, model=model)
   obs_w_predictors <- utils.add_predictors(obs, predictors)
   diagnose_obs_w_predictors(obs_w_predictors, suffix = suffix, folder = diagnostics_folder)
 
