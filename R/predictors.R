@@ -67,81 +67,58 @@ data.get_obs <- function(level = "city", polls=c("pm25","no2"), year=2020, use_c
   }
 }
 
+
 #' Build a raster stack of all potential predictors used for model fitting
 #'
 #' @return
 #' @export
 #'
 #' @examples
-data.predictors <- function(pop, res, year, use_cache=T, suffix=""){
+data.predictors <- function(pop, res, year, use_cache=T, suffix="", model=NULL){
 
-  pm25.base <- data.basemap_pm25(pop, res, year=year, use_cache=use_cache, suffix=suffix)
-  no2.base <- data.basemap_no2(pop, res, use_cache=use_cache, suffix=suffix)
 
-  distance_coast <- data.distance_coast(pop, res, use_cache=use_cache, suffix=suffix)
-  distance_urban <- data.distance_urban(pop, res, use_cache=use_cache, suffix=suffix)
-  grump <- data.grump(pop, res, use_cache=use_cache, suffix=suffix)
-  gadm0 <- data.gadm_raster(pop, res, level=0, use_cache=use_cache, suffix=suffix)
-  gadm1 <- data.gadm_raster(pop, res, level=1, use_cache=use_cache, suffix=suffix)
-
-  pm25_merra2_diff <- data.pm25_merra2_diff(pop, res,
-                                       year_i=data.basemap_pm25_year(year),
-                                       year_f=year,
-                                       use_cache=use_cache, suffix=suffix)
-  no2_omi_diff <- data.no2_omi_diff(pop, res, year_f=year, use_cache=use_cache, suffix=suffix)
-  pop_ratio_log <- data.pop_ratio_log(pop, res, use_cache=use_cache, suffix=suffix)
-  srtm <- data.srtm(pop, res, use_cache=use_cache, suffix=suffix)
-  srtm_05deg <- utils.focal_mean(srtm, d_deg=0.5, pop=pop, res=res, use_cache=use_cache, suffix=suffix)
-  # srtm_1deg <- utils.focal_mean(srtm, d_deg=1, pop=pop, res=res, use_cache=use_cache)
-  # type <- data.type(pop=pop)
-
-  srtm_diff05deg <- srtm -srtm_05deg
-  # srtm_diff1deg <- srtm -srtm_1deg
-
-  # srtm_1deg <- utils.focal_mean(srtm, d_deg=1, res=res, use_cache=use_cache)
-  # srtm_2deg <- utils.focal_mean(srtm, d_deg=2, res=res, use_cache=use_cache)
-
-  pop_05deg <- utils.focal_mean(pop, d_deg=0.5, pop=pop, res=res, use_cache=use_cache, suffix=suffix)
-  pm25_ss_dust_frac <- data.pm25_ss_dust_frac(pop, res, use_cache=use_cache, suffix=suffix)
-  pm25_ss_dust <- data.pm25_ss_dust(pop, res, use_cache=use_cache, suffix=suffix)
-  lon <- data.lon(pop, res, use_cache=use_cache, suffix=suffix)
-  lat <- data.lat(pop, res, use_cache=use_cache, suffix=suffix)
-
-  # Not all predictors will be used but putting them together nonetheless
-  predictors <- list(
-    pm25_prior=pm25.base,
-    no2_prior=no2.base,
-    distance_coast=distance_coast,
-    distance_urban=distance_urban,
-    grump=grump,
-    pop=pop,
-    lon=lon,
-    lat=lat,
-    gadm0=gadm0,
-    gadm1=gadm1,
-    no2_omi_diff=no2_omi_diff,
-    pm25_merra2_diff=pm25_merra2_diff,
-    pop_ratio_log=pop_ratio_log,
-    srtm=srtm,
-    srtm_05deg=srtm_05deg,
-    # srtm_1deg=srtm_1deg,
-    srtm_diff05deg=srtm_diff05deg,
-    # srtm_diff1deg=srtm_diff1deg,
-    pop_05deg=pop_05deg,
-    pm25_ss_dust_frac=pm25_ss_dust_frac,
-    pm25_ss_dust=pm25_ss_dust
-    # type=type
+  apredictors <- alist(
+    pm25_prior = data.basemap_pm25(pop, res, year=year, use_cache=use_cache, suffix=suffix),
+    no2_prior = data.basemap_no2(pop, res, use_cache=use_cache, suffix=suffix),
+    distance_coast = data.distance_coast(pop, res, use_cache=use_cache, suffix=suffix),
+    distance_urban = data.distance_urban(pop, res, use_cache=use_cache, suffix=suffix),
+    grump = data.grump(pop, res, use_cache=use_cache, suffix=suffix),
+    gadm0 = data.gadm_raster(pop, res, level=0, use_cache=use_cache, suffix=suffix),
+    gadm1 = data.gadm_raster(pop, res, level=1, use_cache=use_cache, suffix=suffix),
+    pm25_merra2_diff = data.pm25_merra2_diff(pop, res,
+                                             year_i=data.basemap_pm25_year(year),
+                                             year_f=year,
+                                             use_cache=use_cache, suffix=suffix),
+    no2_omi_diff = data.no2_omi_diff(pop, res, year_f=year, use_cache=use_cache, suffix=suffix),
+    pop_ratio_log = data.pop_ratio_log(pop, res, use_cache=use_cache, suffix=suffix),
+    srtm = data.srtm(pop, res, use_cache=use_cache, suffix=suffix),
+    srtm_05deg = utils.focal_mean(srtm, d_deg=0.5, pop=pop, res=res, use_cache=use_cache, suffix=suffix),
+    srtm_diff05deg = srtm - srtm_05deg,
+    pop_05deg = utils.focal_mean(pop, d_deg=0.5, pop=pop, res=res, use_cache=use_cache, suffix=suffix),
+    pm25_ss_dust_frac = data.pm25_ss_dust_frac(pop, res, use_cache=use_cache, suffix=suffix),
+    pm25_ss_dust = data.pm25_ss_dust(pop, res, use_cache=use_cache, suffix=suffix),
+    pop = pop,
+    lon = data.lon(pop, res, use_cache=use_cache, suffix=suffix),
+    lat = data.lat(pop, res, use_cache=use_cache, suffix=suffix)
   )
 
-  #rs: raster stack
-  predictors <- creahelpers::to_raster(predictors) %>% raster::stack()
+  # Only evaluate those we need for the model
+  predictor_names <- unlist(case_when(
+    T ~ list(names(apredictors))))
 
-  # Adding surrogate variables
-  # rs_predictors$distance_urban_inv <- 1/rs_predictors$distance_urban
-  # rs_predictors$distance_urban_inv[is.infinite(rs_predictors$distance_urban_inv)] <- 1/400
-  # rs_predictors$distance_urban_inv[rs_predictors$distance_urban_inv>1/400] <- 1/400
-  # rs_predictors$road_density_log <- log(rs_predictors$road_density + 1)
-  return(predictors)
+  apredictors <- apredictors[predictor_names]
+
+  evaluate_alist <- function(al, env = parent.frame()) {
+    lapply(al, function(expr) eval(expr, envir = env))
+  }
+
+  predictors <- evaluate_alist(apredictors)
+
+  # Stack
+  predictors_stack <- creahelpers::to_raster(predictors) %>% raster::stack()
+
+  # Return
+  return(predictors_stack)
 }
 
 
