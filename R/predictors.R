@@ -164,20 +164,12 @@ data.basemap_pm25_region <- function(region, year=2020){
 
   if(region != "Global") stop("Now we only use Global from now on")
   # f_pm25_nc <- glue("V5GL04.HybridPM25.Global.{year}01-{year}12.nc")
-  f_pm25_nc <- glue("V6GL02.02.CNNPM25.Global.{year}01-{year}12.nc.nc")
+  f_pm25_nc <- glue("V6GL02.02.CNNPM25.Global.{year}01-{year}12.nc")
   f_pm25_tif <- gsub("\\.nc","\\.tif", f_pm25_nc)
 
   nc_to_tif <- function(f_pm25_nc, f_pm25_tif){
     pm25.base <- raster::raster(creahelpers::get_concentration_path(f_pm25_nc))
 
-    # Not twisted anymore!
-    # if(region=="Global" & year==2018){
-    #   # For some reason the Global dataset is flipped
-    #   pm25.base <- pm25.base %>%
-    #     raster::t() %>% # nc dimensions aren't in raster expected order I suppose
-    #     raster::flip(direction="y") %>%
-    #     raster::flip(direction="x")
-    # }
 
     raster::writeRaster(pm25.base,
                         creahelpers::get_concentration_path(f_pm25_tif),
