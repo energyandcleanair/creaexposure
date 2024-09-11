@@ -163,7 +163,8 @@ data.basemap_pm25 <- function(pop, res, year=2020, use_cache=T, suffix=""){
 data.basemap_pm25_region <- function(region, year=2020){
 
   if(region != "Global") stop("Now we only use Global from now on")
-  f_pm25_nc <- glue("V5GL04.HybridPM25.Global.{year}01-{year}12.nc")
+  # f_pm25_nc <- glue("V5GL04.HybridPM25.Global.{year}01-{year}12.nc")
+  f_pm25_nc <- glue("V6GL02.02.CNNPM25.Global.{year}01-{year}12.nc.nc")
   f_pm25_tif <- gsub("\\.nc","\\.tif", f_pm25_nc)
 
   nc_to_tif <- function(f_pm25_nc, f_pm25_tif){
