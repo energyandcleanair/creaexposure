@@ -10,6 +10,7 @@ models.rf.predict <- function(obs,
                               remove_seasalt_dust_contribution = F,
                               limit_distance_urban = F,
                               distance_urban_quantile = 0.95,
+                              formula=NULL,
                               ...) {
 
   dir.create(results_folder, recursive = T, showWarnings = F)
@@ -30,7 +31,8 @@ models.rf.predict <- function(obs,
     limit_distance_urban = limit_distance_urban,
     distance_urban_quantile = distance_urban_quantile,
     remove_seasalt_dust_contribution = remove_seasalt_dust_contribution,
-    force_rebuild = force_rebuild
+    force_rebuild = force_rebuild,
+    formula = formula
   )
 }
 
@@ -64,31 +66,43 @@ models.rf.predict.generic <- function(formula,
   control <- caret::trainControl(method = "cv", number = 10) # Example: 10-fold cross-validation
 
   # Train Random Forest Model using caret
+
   model <- caret::train(formula, data = data, method = "rf", trControl = control)
 
-  # Export diagnostics
 
   # Predict
   #TODO Understand why the raster predict != from vector predict (if they are)
-  pred_raster <- raster::predict(predictors, model)
+  pred_raster <- raster::predict(
+    predictors[[setdiff(all.vars(formula), "value")]],
+    model
+  )
 
-  # Remove far from urban
-  if (limit_distance_urban) {
-    pred_raster <- utils.mask_far_from_urban(
-      r = pred_raster,
-      predictors = predictors,
-      obs = obs,
-      quantile = distance_urban_quantile
-    )
-  }
+  raster::plot(pred_raster,colNA="black")
 
   # Remove sea salt contribution
   if (remove_seasalt_dust_contribution & poll == "pm25") {
     pred_raster <- pred_raster * (1 - predictors$pm25_ss_dust_frac)
   }
 
+  # Use delta predicted - prior so that we can smooth the transition
+  delta_raster <- pred_raster - prior
+
+  # Remove far from urban
+  if (limit_distance_urban) {
+    delta_raster <- utils.mask_far_from_urban_smooth(
+      r = delta_raster,
+      predictors = predictors,
+      obs = obs,
+      quantile_inner = max(0, distance_urban_quantile - 0.05),
+      quantile_outer = min(1, distance_urban_quantile + 0.05)
+    )
+  }
+
   # Take prior where pred is NA
-  pred_raster[is.na(pred_raster)] <- prior[is.na(pred_raster)]
+  delta_raster[is.na(delta_raster)] <- 0
+
+  # New predicted raster
+  pred_raster <- prior + delta_raster
 
 
   # Diagnose post-transformations
@@ -291,12 +305,17 @@ models.rf.predict.pm25 <- function(obs,
                                    distance_urban_quantile,
                                    remove_seasalt_dust_contribution,
                                    force_rebuild,
+                                   formula=NULL,
                                    ...) {
-  pm25_formula <- value ~ pm25_prior + pm25_merra2_diff +
-    gadm1 + distance_urban +
-    srtm + srtm_diff05deg + srtm_05deg +
-    grump + distance_coast +
-    pop_ratio_log + pop
+
+
+  pm25_formula <- if(is.null(formula)) {
+    value ~ pm25_prior + pm25_merra2_diff + gadm1 + distance_urban +
+      srtm + srtm_diff05deg + srtm_05deg + grump + distance_coast +
+      pop_ratio_log + pop
+  } else {
+    formula
+  }
 
   obs$gadm1 <- as.factor(obs$gadm1) # Should be done beforehand
 
@@ -323,8 +342,16 @@ models.rf.predict.no2 <- function(obs, predictors, regions, res, year, suffix, r
                                   limit_distance_urban,
                                   distance_urban_quantile,
                                   remove_seasalt_dust_contribution,
-                                  force_rebuild) {
-  no2_formula <- value ~ no2_prior + no2_omi_diff + gadm1 + srtm + grump + distance_coast + pop_ratio_log
+                                  force_rebuild,
+                                  formula=NULL) {
+
+
+  no2_formula <- if(is.null(formula)){
+    value ~ no2_prior + no2_omi_diff + gadm1 + srtm + grump + distance_coast + pop_ratio_log
+  } else {
+    formula
+  }
+
   obs$gadm1 <- as.factor(obs$gadm1) # Should be done beforehand
   models.rf.predict.poll(
     formula = no2_formula,

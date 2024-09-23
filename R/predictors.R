@@ -92,11 +92,18 @@ data.predictors <- function(pop, res, year, use_cache=T, suffix="", model=NULL){
     no2_omi_diff = data.no2_omi_diff(pop, res, year_f=year, use_cache=use_cache, suffix=suffix),
     pop_ratio_log = data.pop_ratio_log(pop, res, use_cache=use_cache, suffix=suffix),
     srtm = data.srtm(pop, res, use_cache=use_cache, suffix=suffix),
-    srtm_05deg = utils.focal_mean(srtm, d_deg=0.5, pop=pop, res=res, use_cache=use_cache, suffix=suffix),
-    srtm_diff05deg = srtm - srtm_05deg,
+    srtm_05deg = {
+      srtm <- eval(apredictors$srtm)
+      utils.focal_mean(srtm, d_deg=0.5, pop=pop, res=res, use_cache=use_cache, suffix=suffix)
+    },
+    srtm_diff05deg = {
+      srtm <- eval(apredictors$srtm)
+      srtm_05deg <- eval(apredictors$srtm_05deg)
+      srtm - srtm_05deg
+    },
     pop_05deg = utils.focal_mean(pop, d_deg=0.5, pop=pop, res=res, use_cache=use_cache, suffix=suffix),
-    pm25_ss_dust_frac = data.pm25_ss_dust_frac(pop, res, use_cache=use_cache, suffix=suffix),
-    pm25_ss_dust = data.pm25_ss_dust(pop, res, use_cache=use_cache, suffix=suffix),
+    # pm25_ss_dust_frac = data.pm25_ss_dust_frac(pop, res, use_cache=use_cache, suffix=suffix),
+    # pm25_ss_dust = data.pm25_ss_dust(pop, res, use_cache=use_cache, suffix=suffix),
     pop = pop,
     lon = data.lon(pop, res, use_cache=use_cache, suffix=suffix),
     lat = data.lat(pop, res, use_cache=use_cache, suffix=suffix)
@@ -144,7 +151,7 @@ data.basemap_pm25_year <- function(year){
 }
 
 
-data.basemap_pm25 <- function(pop, res, year=2020, use_cache=T, suffix=""){
+data.basemap_pm25 <- function(pop, res, year=2020, fill_na=T, use_cache=T, suffix=""){
 
   basemap_year <- data.basemap_pm25_year(year)
 
@@ -154,17 +161,28 @@ data.basemap_pm25 <- function(pop, res, year=2020, use_cache=T, suffix=""){
   }else{
     pm25 <- data.basemap_pm25_region("Global", year=basemap_year) %>%
       terra::resample(pop, method='bilinear')
+
+    # fill water bodies etc
+    if(fill_na){
+      pm25 <- utils.fill_na(pm25, max_distance_km = 20, method="bilinear")
+    }
+
     terra::writeRaster(pm25, filename = f, overwrite = T)
     return(pm25)
   }
 }
 
 
-data.basemap_pm25_region <- function(region, year=2020){
+data.basemap_pm25_region <- function(region, year=2020, version="5"){
 
+  # Version 6 is available but has weird artefacts in Bangladesh at least
   if(region != "Global") stop("Now we only use Global from now on")
-  # f_pm25_nc <- glue("V5GL04.HybridPM25.Global.{year}01-{year}12.nc")
-  f_pm25_nc <- glue("V6GL02.02.CNNPM25.Global.{year}01-{year}12.nc")
+
+  basename <- switch(version,
+                     "5"="V5GL04.HybridPM25.Global",
+                     "6"="V6GL02.02.CNNPM25.Global")
+
+  f_pm25_nc <- glue("{basename}.{year}01-{year}12.nc")
   f_pm25_tif <- gsub("\\.nc","\\.tif", f_pm25_nc)
 
   nc_to_tif <- function(f_pm25_nc, f_pm25_tif){
@@ -258,6 +276,8 @@ data.pop_ratio_log <- function(pop, res, use_cache=T, suffix=""){
       terra::resample(pop) %>% terra::mask(pop)
 
     r_ratio <- max(log(min(r2020/r2010,10)), -2)
+    # Fill NA with 0
+    r_ratio[is.na(r_ratio)] <- 0
     names(r_ratio) <- "pop_ratio"
     writeRaster(r_ratio, f, overwrite=T)
     return(r_ratio)
@@ -273,7 +293,7 @@ data.pop_ratio_log <- function(pop, res, use_cache=T, suffix=""){
 
 data.grump <- function(pop, res, use_cache=T, suffix=""){
 
-  f <- file.path("cache", paste0("grump_",res,suffix,".tif"))
+  f <- file.path("cache", paste0("grump_", res,suffix, ".tif"))
 
   if(!use_cache | !file.exists(f)){
     # https://sedac.ciesin.columbia.edu/data/collection/grump-v1
@@ -284,6 +304,7 @@ data.grump <- function(pop, res, use_cache=T, suffix=""){
       grump <- grump %>% terra::aggregate(fact=n_aggregate, fun="modal")
     }
     grump <- grump %>% terra::resample(pop, method="near")
+
     terra::writeRaster(grump, f, overwrite=T)
     return(grump)
   }else{

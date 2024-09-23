@@ -1,14 +1,14 @@
 Package: creaexposure
 Type: Package
 Title: Building exposure map
-Version: 0.3.0
+Version: 0.4.1
 Author: Hubert Thieriot
 Maintainer: Hubert Thieriot <hubert@energyandcleanair.com>
 Description: Creating adjusted global &amp; country maps based on observations and literature basemaps
 License: MIT
 Encoding: UTF-8
 LazyData: true
-Version: 0.2.0
+Version: 0.3.0
 Imports:
     raster,
     terra,
@@ -24,7 +24,8 @@ Imports:
     caret,
     randomForest,
     forcats,
-    logger
+    logger,
+    lifecycle
 Depends:
     ggplot2
 Remotes:

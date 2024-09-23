@@ -175,3 +175,98 @@ utils.mask_far_from_urban <- function(r, predictors, obs, quantile=0.95){
   r %>%
     raster::mask(mask)
 }
+
+
+#' Same as utils.mask_far_from_urban but with a smooth transition zone
+#'
+#' @param r
+#' @param predictors
+#' @param obs
+#' @param quantile_inner
+#' @param quantile_outer
+#'
+#' @return
+#' @export
+#'
+#' @examples
+utils.mask_far_from_urban_smooth <- function(r, predictors, obs, quantile_inner=0.90, quantile_outer=0.95){
+
+  # Calculate inner and outer distance thresholds based on quantiles
+  inner_distance <- quantile(obs$distance_urban, quantile_inner, na.rm = TRUE)
+  outer_distance <- quantile(obs$distance_urban, quantile_outer, na.rm = TRUE)
+
+  # Get the distance to urban areas raster
+  dist <- predictors$distance_urban
+
+  # Initialize the weighting raster
+  w <- raster::raster(dist)
+
+  # Assign weights based on distance thresholds
+  w[dist <= inner_distance] <- 1
+  w[dist >= outer_distance] <- 0
+  transition_zone <- dist > inner_distance & dist < outer_distance
+  w[transition_zone] <- (outer_distance - dist[transition_zone]) / (outer_distance - inner_distance)
+
+  # Apply the weighting to your raster
+  r_smooth <- r * w
+
+  return(r_smooth)
+}
+
+
+
+#' Fill raster NA values with a moving average or mode
+#'
+#' @param r
+#' @param d_deg
+#' @param pop
+#' @param suffix
+#'
+#' @return
+#' @export
+#'
+#' @examples
+utils.fill_na <- function(raster, max_distance_km=20, method="bilinear"){
+
+    if (!(method %in% c("bilinear", "nearest", "mode"))) {
+      stop("Method must be one of 'bilinear', 'nearest', or 'mode'")
+    }
+
+    # Identify where the NA values are
+    missing_vals <- is.na(raster)
+
+    # If no missing values, return the original raster
+    if (!any(missing_vals[])) {
+      return(raster)
+    }
+
+    # Create a distance raster where cells are the distance to the nearest non-NA value
+    distance_raster <- terra::distance(raster, unit = "km")
+
+    # Mask areas where distance exceeds the specified max distance
+    mask_within_limit <- distance_raster <= max_distance_km
+
+    # Nearest/Mode interpolation using focal operation within a specified neighborhood
+    # get res in km
+    res_km <- terra::res(raster)[1] * 111
+    window_size <- ceiling(max_distance_km / res_km) %/% 2 * 2 + 1
+    filled_raster <- terra::focal(raster, w = window_size, fun = function(x) {
+      if (all(is.na(x))) {
+        return(NA)
+      } else if (method == "bilinear") {
+        return(mean(x, na.rm = TRUE))  # Bilinear interpolation
+      }else if (method == "mode") {
+        return(terra::modal(x, na.rm = TRUE))  # Mode function
+      } else {
+        return(terra::modal(x, na.rm = TRUE))  # Nearest behaves similarly
+      }
+    })
+
+
+    # Apply the distance limit mask: Only fill NA values within the max distance
+    raster_filled <- raster
+    mask <- missing_vals & mask_within_limit
+    raster_filled[mask[]==T] <- filled_raster[mask[]==T]
+
+    return(raster_filled)
+  }

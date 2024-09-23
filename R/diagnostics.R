@@ -1,5 +1,7 @@
 diagnose_obs_w_predictors <- function(obs_w_predictors, suffix="", folder="diagnostics"){
 
+  diagnostics <- list()
+
   dir.create(folder, showWarnings = FALSE, recursive = TRUE)
 
   d <- obs_w_predictors %>%
@@ -15,18 +17,23 @@ diagnose_obs_w_predictors <- function(obs_w_predictors, suffix="", folder="diagn
     scale_x_continuous(limits = c(0, max(max(d$value), max(d$prior)))) +
     scale_y_continuous(limits = c(0, max(max(d$value), max(d$prior)))) +
     facet_wrap(poll~country) +
-    ggrepel::geom_text_repel(aes(label=location_id), size=2)
+    ggrepel::geom_text_repel(aes(label=location_id), size=2) -> plt
 
   ggsave(paste0(folder, "/obs_w_predictors", suffix, ".png"))
+  diagnostics["plot_obs_w_predictors"] <- plt
+
+  return(diagnostics)
 }
 
 
-diagnose_results <- function(results, polls, obs_w_predictors, suffix="", folder="diagnostics"){
+diagnose_results <- function(maps, polls, obs_w_predictors, suffix="", folder="diagnostics"){
+
+  diagnostics <- list()
 
   for(poll in polls){
 
     # Points points -----------------------------------------------------------
-    map <- results[[poll]]
+    map <- maps[[poll]]
     data_sf <- sf::st_as_sf(obs_w_predictors) %>%
       filter(poll == !!poll) %>%
       select(location_id, country, poll, value_measured=value, pm25_prior, no2_prior) %>%
@@ -50,6 +57,8 @@ diagnose_results <- function(results, polls, obs_w_predictors, suffix="", folder
       coord_equal() +
       geom_abline(intercept = 0, slope = 1) +
       facet_wrap(~country) -> plt
+
+    diagnostics["plot_points"][[poll]] <- plt
 
     ggsave(paste0(folder, "/results_points_", poll, suffix, ".png"))
 
@@ -91,8 +100,11 @@ diagnose_results <- function(results, polls, obs_w_predictors, suffix="", folder
       theme(legend.position="bottom") +
       theme(legend.key.width=unit(5, "cm")) -> plt
 
+    diagnostics["plot_map"][[poll]] <- plt
     ggsave(paste0(folder, "/results_map_", poll, suffix, ".png"))
   }
+
+  return(diagnostics)
 }
 
 

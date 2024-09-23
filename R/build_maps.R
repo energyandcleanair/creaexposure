@@ -1,4 +1,25 @@
-build_map <- function(res,
+#' Build the ex
+#'
+#' @param res
+#' @param pop
+#' @param polls
+#' @param suffix
+#' @param regions
+#' @param year
+#' @param force_rebuild
+#' @param use_cache_predictors
+#' @param obs
+#' @param obs_level
+#' @param model
+#' @param results_folder
+#' @param diagnostics_folder
+#' @param ...
+#'
+#' @return
+#' @export
+#'
+#' @examples
+build_maps <- function(res,
                       pop=NULL,
                       polls = c("pm25", "no2"),
                       suffix = "",
@@ -11,9 +32,11 @@ build_map <- function(res,
                       model = MODEL_GAM,
                       results_folder = file.path("results", model),
                       diagnostics_folder = "diagnostics",
+                      formula=NULL,
                       ...) {
 
   logger::log_layout(creahelpers::log_layout_crea)
+  diagnostics <- list()
 
   ###################################################
   # Prepare data
@@ -26,12 +49,15 @@ build_map <- function(res,
   suffix_predictors <- ifelse(is.null(regions), "", paste(c("_",tolower(get_region_names(regions))), collapse=""))
   predictors <- data.predictors(pop, res, year=year, suffix=suffix_predictors, use_cache=use_cache_predictors, model=model)
   obs_w_predictors <- utils.add_predictors(obs, predictors)
-  diagnose_obs_w_predictors(obs_w_predictors, suffix = suffix, folder = diagnostics_folder)
+
+
+  diagnostics1 <- diagnose_obs_w_predictors(obs_w_predictors, suffix = suffix, folder = diagnostics_folder)
+  diagnostics <- c(diagnostics, diagnostics1)
 
   obs_w_predictors <- add_region_to_obs(obs_w_predictors, regions)
 
 
-  results <- list()
+  maps <- list()
   for(poll in polls){
     models.predict(model=model,
                    poll=poll,
@@ -43,16 +69,39 @@ build_map <- function(res,
                    obs=obs_w_predictors,
                    results_folder=results_folder,
                    force_rebuild=force_rebuild,
-                   ...) -> results[[poll]]
+                   formula=formula,
+                   ...) -> maps[[poll]]
   }
 
   # Run diagnostics on results
-  diagnose_results(
-    results = results,
+  diagnostics2 <- diagnose_results(
+    maps = maps,
     polls = polls,
     obs_w_predictors = obs_w_predictors,
     suffix = suffix,
     folder = diagnostics_folder)
 
-  return(results)
+  diagnostics <- c(diagnostics, diagnostics2)
+
+
+  # Postcompute e.g. plot maps
+  units <- obs %>% distinct(poll, unit) %>% deframe()
+  maps_plots <- plot_maps(maps=maps, units=units)
+
+  return(list(
+    maps = maps,
+    diagnostics = diagnostics,
+    maps_plots = maps_plots
+  ))
+}
+
+
+
+
+build_map <- function(...) {
+  # Use lifecycle's deprecate_warn to show a warning message
+  deprecate_warn("0.4.0", "build_map()", "build_maps()")
+
+  # Call the new function to maintain backward compatibility
+  build_maps(...)
 }

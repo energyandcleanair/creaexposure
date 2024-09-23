@@ -40,6 +40,8 @@ importFrom(forcats,fct_reorder)
 importFrom(glue,glue)
 
 
+importFrom(lifecycle,deprecate_warn)
+
 importFrom(lubridate,date)
 importFrom(lubridate,decimal_date)
 importFrom(lubridate,today)
