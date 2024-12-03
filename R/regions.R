@@ -27,6 +27,9 @@ get_region_iso2s <- function(region){
   # If a list, values should be iso2s
   if(is.list(region)) return(unname(unlist(region)))
 
+  # If vector of iso2s
+  if(is.vector(region)) return(region)
+
   # If a string, look into the regions list
   if(is.character(region)){
     definitions <- get_all_regions()
