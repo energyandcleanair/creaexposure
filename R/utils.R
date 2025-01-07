@@ -194,7 +194,8 @@ utils.mask_far_from_urban_smooth <- function(r,
                                              obs,
                                              quantile_inner=0.90,
                                              quantile_outer=0.95,
-                                             diagnostics_folder="diagnostics"
+                                             diagnostics_folder="diagnostics",
+                                             suffix=""
                                              ){
 
   # Calculate inner and outer distance thresholds based on quantiles
@@ -212,6 +213,12 @@ utils.mask_far_from_urban_smooth <- function(r,
   w[dist >= outer_distance] <- 0
   transition_zone <- dist > inner_distance & dist < outer_distance
   w[transition_zone] <- (outer_distance - dist[transition_zone]) / (outer_distance - inner_distance)
+
+  # Diagnose mask
+  filepath <- file.path(diagnostics_folder, glue("mask_far_from_urban{suffix}.jpg"))
+  jpeg(filepath, width=8, height=8, units="in", res=300)
+  raster::plot(w)
+  dev.off()
 
   # Apply the weighting to your raster
   r_smooth <- r * w
