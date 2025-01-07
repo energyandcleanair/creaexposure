@@ -1,34 +1,12 @@
-diagnose_obs_w_predictors <- function(obs_w_predictors, suffix="", folder="diagnostics"){
-
-  diagnostics <- list()
-
-  dir.create(folder, showWarnings = FALSE, recursive = TRUE)
-
-  d <- obs_w_predictors %>%
-    select(location_id, country, poll, value, pm25_prior, no2_prior) %>%
-    tidyr::pivot_longer(cols = c("pm25_prior", "no2_prior"),
-                        names_transform = list(poll_prior = ~ gsub("_prior", "", .)),
-                        names_to = "poll_prior", values_to = "prior") %>%
-    filter(poll==poll_prior)
-
-  ggplot(d, aes(x=prior, y=value)) +
-    geom_point() +
-    geom_abline(intercept = 0, slope = 1) +
-    scale_x_continuous(limits = c(0, max(max(d$value), max(d$prior)))) +
-    scale_y_continuous(limits = c(0, max(max(d$value), max(d$prior)))) +
-    facet_wrap(poll~country) +
-    ggrepel::geom_text_repel(aes(label=location_id), size=2) -> plt
-
-  ggsave(paste0(folder, "/obs_w_predictors", suffix, ".png"))
-  diagnostics["plot_obs_w_predictors"] <- plt
-
-  return(diagnostics)
-}
-
 
 diagnose_results <- function(maps, polls, obs_w_predictors, suffix="", folder="diagnostics"){
 
-  diagnostics <- list()
+  diagnostics <- list(
+    plot_points = list(),
+    map = list(),
+    data = list()
+  )
+
 
   for(poll in polls){
 
@@ -47,7 +25,7 @@ diagnose_results <- function(maps, polls, obs_w_predictors, suffix="", folder="d
     data_sf$value_predicted <- raster::extract(map, data_sf)
 
     data_sf %>%
-      select(country, starts_with("value")) %>%
+      select(location_id, country, starts_with("value")) %>%
       pivot_longer(cols = c(value_prior, value_predicted),
                    names_to = "variable",
                    names_prefix = "value_",
@@ -56,13 +34,14 @@ diagnose_results <- function(maps, polls, obs_w_predictors, suffix="", folder="d
       geom_point() +
       coord_equal() +
       geom_abline(intercept = 0, slope = 1) +
+      ggrepel::geom_text_repel(aes(label=location_id), size=2) -> plt
       facet_wrap(~country) -> plt
 
-    diagnostics["plot_points"][[poll]] <- plt
+
+    diagnostics[["plot_points"]][[poll]] <- plt
+    diagnostics[["data"]][[poll]] <- data_sf
 
     ggsave(paste0(folder, "/results_points_", poll, suffix, ".png"))
-
-
 
     # Map view ----------------------------------------------------------------
     library(gstat)
@@ -100,8 +79,8 @@ diagnose_results <- function(maps, polls, obs_w_predictors, suffix="", folder="d
       theme(legend.position="bottom") +
       theme(legend.key.width=unit(5, "cm")) -> plt
 
-    diagnostics["plot_map"][[poll]] <- plt
-    ggsave(paste0(folder, "/results_map_", poll, suffix, ".png"))
+    diagnostics[["map"]][[poll]] <- plt
+    ggsave(paste0(folder, "/results_map_w_points", poll, suffix, ".png"))
   }
 
   return(diagnostics)
