@@ -189,7 +189,13 @@ utils.mask_far_from_urban <- function(r, predictors, obs, quantile=0.95){
 #' @export
 #'
 #' @examples
-utils.mask_far_from_urban_smooth <- function(r, predictors, obs, quantile_inner=0.90, quantile_outer=0.95){
+utils.mask_far_from_urban_smooth <- function(r,
+                                             predictors,
+                                             obs,
+                                             quantile_inner=0.90,
+                                             quantile_outer=0.95,
+                                             diagnostics_folder="diagnostics"
+                                             ){
 
   # Calculate inner and outer distance thresholds based on quantiles
   inner_distance <- quantile(obs$distance_urban, quantile_inner, na.rm = TRUE)

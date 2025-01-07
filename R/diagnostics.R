@@ -48,7 +48,6 @@ diagnose_results <- function(maps, polls, obs_w_predictors, suffix="", folder="d
     library(sp)
     library(tidyr)
     library(dplyr)
-    library(rgdal)
     library(sf)
     library(raster)
     library(ggplot2)
@@ -87,6 +86,23 @@ diagnose_results <- function(maps, polls, obs_w_predictors, suffix="", folder="d
 }
 
 
+diagnose_predictors <- function(predictors, suffix="", folder="diagnostics"){
+
+  n_layers <- raster::nlayers(predictors)
+  height <- ceiling(sqrt(n_layers)) * 4
+  width <- height
+
+  filepath <- file.path(folder, glue("predictors{suffix}.jpg"))
+  jpeg(filepath, width=width, height=height, units="in", res=300)
+  raster::plot(predictors, col=viridis::viridis(n_layers),
+                      layout=c(ceiling(sqrt(n_layers)),
+                               ceiling(sqrt(n_layers))))
+  dev.off()
+
+
+
+
+}
 
 
 

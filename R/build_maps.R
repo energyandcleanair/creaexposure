@@ -51,6 +51,10 @@ build_maps <- function(res,
   obs_w_predictors <- utils.add_predictors(obs, predictors)
   obs_w_predictors <- add_region_to_obs(obs_w_predictors, regions)
 
+  # Diagnose predictors (well mainly plot them)
+
+
+
   maps <- list()
   for(poll in polls){
     models.predict(model=model,

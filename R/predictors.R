@@ -464,7 +464,6 @@ data.road_density_groads <- function(res, pop, use_cache=T, suffix=""){
 
     # Using this approach
     # https://gis.stackexchange.com/questions/119993/convert-line-shapefile-to-raster-value-total-length-of-lines-within-cell
-    library(rgdal)
     library(raster)
     library(rgeos)
     library(tictoc)
