@@ -8,6 +8,7 @@ models.gam.predict <- function(
     suffix,
     force_rebuild = T,
     results_folder = "results/gam",
+    diagnostics_folder = "diagnostics",
     remove_seasalt_dust_contribution = T,
     limit_distance_urban = T,
     distance_urban_quantile = 0.95,
@@ -28,6 +29,7 @@ models.gam.predict <- function(
     suffix = suffix,
     year = year,
     results_folder = results_folder,
+    diagnostics_folder = diagnostics_folder,
     limit_distance_urban = limit_distance_urban,
     distance_urban_quantile = distance_urban_quantile,
     remove_seasalt_dust_contribution = remove_seasalt_dust_contribution,
@@ -45,6 +47,7 @@ models.gam.predict.generic <- function(obs_global,
                                        gadm0_levels,
                                        gadm1_levels,
                                        results_folder,
+                                       diagnostics_folder,
                                        ...) {
   #####################
   # Prepare data
@@ -69,7 +72,7 @@ models.gam.predict.generic <- function(obs_global,
   #####################
   # Quick diagnosis
   #####################
-  sink(file = glue("{results_folder}/gam_{res}_{poll}_{region}.txt"))
+  sink(file = glue("{diagnostics_folder}/gam_{res}_{poll}_{region}.txt"))
   print(summary(model))
   sink(file = NULL)
   p <- predict(model, data, se.fit = T)
@@ -201,22 +204,14 @@ models.gam.predict.pm25 <- function(obs, predictors, regions, res, year, suffix,
     })
 
   pm25_diff <- models.gam.combine_predictions(pm25_preds, error_relative_threshold = 1.645)
-
-  pm25_diff <- utils.mask_far_from_urban(
-    r = pm25_diff,
-    predictors = predictors,
-    obs = obs,
-    quantile = 0.95
-  )
-
   # Remove far from urban
   if (limit_distance_urban) {
-    pm25_diff <- utils.mask_far_from_urban(
-      r = pm25_diff,
+    pm25_diff <- mask_far_from_urban(
+      delta_raster = pm25_diff,
       predictors = predictors,
       obs = obs,
       quantile = distance_urban_quantile
-    )
+    ) * pm25_diff
   }
 
   pm25 <- raster::calc(raster::stack(list(pm25_diff, predictors$pm25_prior)), sum, na.rm = T) %>%
@@ -297,7 +292,7 @@ models.gam.predict.no2 <- function(obs, predictors, regions, res, year, suffix, 
 
   no2_diff <- models.gam.combine_predictions(preds = no2_preds, error_relative_threshold = 1.645)
 
-  no2_diff <- utils.mask_far_from_urban(
+  no2_diff <- mask_far_from_urban(
     r = no2_diff,
     predictors = predictors,
     obs = obs,

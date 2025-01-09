@@ -33,6 +33,16 @@ build_maps <- function(res,
                       results_folder = file.path("results", model),
                       diagnostics_folder = "diagnostics",
                       formula=NULL,
+
+                      # Masking options
+                      limit_distance_urban = F,
+                      distance_urban_quantile_inner = 0.90,
+                      distance_urban_quantile_outer = 0.95,
+
+                      limit_distance_stations = F,
+                      distance_stations_inner_km = 50,
+                      distance_stations_outer_km = 100,
+                      distance_stations_smooth = T,
                       ...) {
 
   logger::log_layout(creahelpers::log_layout_crea)
@@ -52,8 +62,10 @@ build_maps <- function(res,
   obs_w_predictors <- add_region_to_obs(obs_w_predictors, regions)
 
   # Diagnose predictors (well mainly plot them)
-
-
+  diagnose_predictors(predictors = predictors,
+                      suffix = suffix,
+                      formula = formula,
+                      folder = diagnostics_folder)
 
   maps <- list()
   for(poll in polls){
@@ -66,8 +78,17 @@ build_maps <- function(res,
                    predictors=predictors,
                    obs=obs_w_predictors,
                    results_folder=results_folder,
+                   diagnostics_folder = diagnostics_folder,
                    force_rebuild=force_rebuild,
                    formula=formula,
+                   # Masking
+                   limit_distance_urban=limit_distance_urban,
+                   distance_urban_quantile_inner=distance_urban_quantile_inner,
+                   distance_urban_quantile_outer=distance_urban_quantile_outer,
+                   limit_distance_stations=limit_distance_stations,
+                   distance_stations_inner_km=distance_stations_inner_km,
+                   distance_stations_outer_km=distance_stations_outer_km,
+                   distance_stations_smooth=distance_stations_smooth,
                    ...) -> maps[[poll]]
   }
 
