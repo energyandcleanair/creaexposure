@@ -7,10 +7,18 @@ models.rf.predict <- function(obs,
                               suffix,
                               force_rebuild = T,
                               results_folder = "results/rf",
+                              diagnostics_folder = "diagnostics",
                               remove_seasalt_dust_contribution = F,
+                              formula=NULL,
+
+                              # Masking options
                               limit_distance_urban = F,
                               distance_urban_quantile = 0.95,
-                              formula=NULL,
+                              distance_urban_quantile_inner = 0.90,
+                              limit_distance_stations = F,
+                              distance_stations_inner_km = 50,
+                              distance_stations_outer_km = 100,
+                              distance_stations_smooth = T,
                               ...) {
 
   dir.create(results_folder, recursive = T, showWarnings = F)
@@ -28,8 +36,13 @@ models.rf.predict <- function(obs,
     suffix = suffix,
     year = year,
     results_folder = results_folder,
+    diagnostics_folder = diagnostics_folder,
     limit_distance_urban = limit_distance_urban,
     distance_urban_quantile = distance_urban_quantile,
+    limit_distance_stations = limit_distance_stations,
+    distance_stations_inner_km = distance_stations_inner_km,
+    distance_stations_outer_km = distance_stations_outer_km,
+    distance_stations_smooth = distance_stations_smooth,
     remove_seasalt_dust_contribution = remove_seasalt_dust_contribution,
     force_rebuild = force_rebuild,
     formula = formula
@@ -46,6 +59,10 @@ models.rf.predict.generic <- function(formula,
                                       res,
                                       year,
                                       suffix,
+                                      limit_distance_stations,
+                                      distance_stations_inner_km,
+                                      distance_stations_outer_km,
+                                      distance_stations_smooth,
                                       limit_distance_urban,
                                       distance_urban_quantile,
                                       remove_seasalt_dust_contribution,
@@ -87,16 +104,35 @@ models.rf.predict.generic <- function(formula,
   # Use delta predicted - prior so that we can smooth the transition
   delta_raster <- pred_raster - prior
 
-  # Remove far from urban
+  # Get weights from both masking functions
+  w_urban <- 1
+  w_stations <- 1
+
   if (limit_distance_urban) {
-    delta_raster <- utils.mask_far_from_urban_smooth(
-      r = delta_raster,
+    w_urban <- mask_far_from_urban_smooth(
+      delta_raster = delta_raster,
       predictors = predictors,
       obs = obs,
       quantile_inner = max(0, distance_urban_quantile - 0.05),
       quantile_outer = min(1, distance_urban_quantile + 0.05)
     )
   }
+
+  if (limit_distance_stations) {
+    w_stations <- mask_far_from_stations(
+      delta_raster = delta_raster,
+      obs = obs,
+      inner_buffer_km = distance_stations_inner_km,
+      outer_buffer_km = distance_stations_outer_km,
+      smooth = distance_stations_smooth
+    )
+  }
+
+  # Combine weights by taking the minimum
+  w_combined <- min(w_urban, w_stations)
+
+  # Apply combined weight to delta
+  delta_raster <- delta_raster * w_combined
 
   # Take prior where pred is NA
   delta_raster[is.na(delta_raster)] <- 0
@@ -145,12 +181,16 @@ models.rf.diagnose <- function(model, diagnostics_folder, res, poll, region, yea
   model$finalModel$importance %>%
     as.data.frame() %>%
     arrange(desc(IncNodePurity)) %>%
-    head(20) %>%
+    # head(20) %>%
     # add rownames as a column
     tibble::rownames_to_column("var") %>%
     mutate(var = fct_reorder(var, IncNodePurity)) %>%
     ggplot() +
-    geom_col(aes(y = var, x = IncNodePurity)) -> plt
+    geom_col(aes(y = var, x = IncNodePurity)) +
+    labs(title = glue("[DIAGNOSTIC] Predictor importance in Random Forest model for {rcrea::poll_str(poll)}"),
+         x = "IncNodePurity",
+         y = "Predictor") +
+    rcrea::theme_crea_new() -> plt
 
   plt
   ggsave(filepath %>% gsub("\\.txt", ".png", .), plt, width = 10, height = 10)
@@ -234,9 +274,14 @@ models.rf.predict.poll <- function(obs,
                                    formula,
                                    prior,
                                    results_folder,
+                                   diagnostics_folder = results_folder,
                                    force_rebuild = T,
                                    limit_distance_urban = T,
                                    distance_urban_quantile = 0.95,
+                                   limit_distance_stations = F,
+                                   distance_stations_inner_km = 50,
+                                   distance_stations_outer_km = 100,
+                                   distance_stations_smooth = T,
                                    remove_seasalt_dust_contribution = T,
                                    ...) {
 
@@ -267,8 +312,13 @@ models.rf.predict.poll <- function(obs,
             year = year,
             suffix=suffix,
             results_folder = results_folder,
+            diagnostics_folder = diagnostics_folder,
             limit_distance_urban = limit_distance_urban,
             distance_urban_quantile = distance_urban_quantile,
+            limit_distance_stations = limit_distance_stations,
+            distance_stations_inner_km = distance_stations_inner_km,
+            distance_stations_outer_km = distance_stations_outer_km,
+            distance_stations_smooth = distance_stations_smooth,
             remove_seasalt_dust_contribution = remove_seasalt_dust_contribution,
           )
   }) %>%
@@ -300,9 +350,15 @@ models.rf.predict.poll <- function(obs,
 
 models.rf.predict.pm25 <- function(obs,
                                    predictors,
-                                   regions, res, year, suffix, results_folder,
+                                   regions, res, year, suffix,
+                                   results_folder,
+                                   diagnostics_folder,
                                    limit_distance_urban,
                                    distance_urban_quantile,
+                                   limit_distance_stations,
+                                   distance_stations_inner_km,
+                                   distance_stations_outer_km,
+                                   distance_stations_smooth,
                                    remove_seasalt_dust_contribution,
                                    force_rebuild,
                                    formula=NULL,
@@ -330,17 +386,28 @@ models.rf.predict.pm25 <- function(obs,
     poll = "pm25",
     prior = predictors$pm25_prior,
     results_folder = results_folder,
+    diagnostics_folder = diagnostics_folder,
     force_rebuild=force_rebuild,
     limit_distance_urban = limit_distance_urban,
     distance_urban_quantile = distance_urban_quantile,
-    remove_seasalt_dust_contribution = remove_seasalt_dust_contribution
+    remove_seasalt_dust_contribution = remove_seasalt_dust_contribution,
+    limit_distance_stations = limit_distance_stations,
+    distance_stations_inner_km = distance_stations_inner_km,
+    distance_stations_outer_km = distance_stations_outer_km,
+    distance_stations_smooth = distance_stations_smooth
   )
 }
 
 
-models.rf.predict.no2 <- function(obs, predictors, regions, res, year, suffix, results_folder,
+models.rf.predict.no2 <- function(obs, predictors, regions, res, year, suffix,
+                                  results_folder,
+                                  diagnostics_folder,
                                   limit_distance_urban,
                                   distance_urban_quantile,
+                                  limit_distance_stations,
+                                  distance_stations_inner_km,
+                                  distance_stations_outer_km,
+                                  distance_stations_smooth,
                                   remove_seasalt_dust_contribution,
                                   force_rebuild,
                                   formula=NULL) {
@@ -364,9 +431,14 @@ models.rf.predict.no2 <- function(obs, predictors, regions, res, year, suffix, r
     poll = "no2",
     prior = predictors$no2_prior,
     results_folder = results_folder,
+    diagnostics_folder = diagnostics_folder,
     force_rebuild=force_rebuild,
     limit_distance_urban = limit_distance_urban,
     distance_urban_quantile = distance_urban_quantile,
+    limit_distance_stations = limit_distance_stations,
+    distance_stations_inner_km = distance_stations_inner_km,
+    distance_stations_outer_km = distance_stations_outer_km,
+    distance_stations_smooth = distance_stations_smooth,
     remove_seasalt_dust_contribution = remove_seasalt_dust_contribution
   )
 }

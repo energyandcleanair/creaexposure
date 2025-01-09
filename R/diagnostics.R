@@ -86,8 +86,17 @@ diagnose_results <- function(maps, polls, obs_w_predictors, suffix="", folder="d
 }
 
 
-diagnose_predictors <- function(predictors, suffix="", folder="diagnostics"){
+diagnose_predictors <- function(predictors, formula=NULL, suffix="", folder="diagnostics"){
 
+
+  if(!is.null(formula)){
+    # Extract useful predictors from formula
+    layers <- intersect(all.vars(formula), names(predictors))
+  }else{
+    layers <- names(predictors)
+  }
+
+  predictors <- predictors[[layers]]
   n_layers <- raster::nlayers(predictors)
   height <- ceiling(sqrt(n_layers)) * 4
   width <- height
