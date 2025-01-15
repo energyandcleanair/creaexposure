@@ -1,7 +1,7 @@
 Package: creaexposure
 Type: Package
 Title: Building exposure map
-Version: 0.4.2
+Version: 0.4.3
 Author: Hubert Thieriot
 Maintainer: Hubert Thieriot <hubert@energyandcleanair.org>
 Description: Creating adjusted global &amp; country maps based on observations and literature basemaps

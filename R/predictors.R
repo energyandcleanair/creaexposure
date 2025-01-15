@@ -145,7 +145,7 @@ data.basemap_pm25_year <- function(year){
     year <- as.numeric(year)
   }
 
-  basemap_years <- seq(2015, 2022)
+  basemap_years <- seq(2015, 2023)
   basemap_year <- max(basemap_years[basemap_years<=year])
   return(basemap_year)
 }
@@ -179,7 +179,7 @@ data.basemap_pm25_region <- function(region, year=2020, version="5"){
   if(region != "Global") stop("Now we only use Global from now on")
 
   basename <- switch(version,
-                     "5"="V5GL04.HybridPM25.Global",
+                     "5"="V5GL0502.HybridPM25.Global",
                      "6"="V6GL02.02.CNNPM25.Global")
 
   f_pm25_nc <- glue("{basename}.{year}01-{year}12.nc")
