@@ -145,7 +145,7 @@ data.basemap_pm25_year <- function(year){
     year <- as.numeric(year)
   }
 
-  basemap_years <- seq(2015, 2023)
+  basemap_years <- seq(2000, 2023) # Years available
   basemap_year <- max(basemap_years[basemap_years<=year])
   return(basemap_year)
 }
