@@ -129,37 +129,32 @@ data.predictors <- function(pop, res, year, use_cache=T, suffix="", model=NULL){
 }
 
 
-#' Find the closest year for pm2.5
+
+
+#' Get the PM2.5 basemap for a given year from van Donkelaar
+#' Files are retrieved from the gis/concentration folder
+#' It looks for the closest year available
 #'
-#' @param year either the year integer, or mid2023mid2024 if from July to June
+#' @param pop
+#' @param res
+#' @param year
+#' @param fill_na
+#' @param use_cache
+#' @param suffix
 #'
-#' @return
+#' @returns
 #' @export
 #'
 #' @examples
-data.basemap_pm25_year <- function(year){
+data.basemap_pm25 <- function(pop, res, year=2020, fill_na=T, use_cache=T, suffix="", version="5"){
 
-  if(str_detect(year, "^mid\\d{4}mid\\d{4}$")){
-    year <- as.numeric(str_match(year, "mid(\\d{4})mid")[2])
-  }else{
-    year <- as.numeric(year)
-  }
-
-  basemap_years <- seq(2000, 2023) # Years available
-  basemap_year <- max(basemap_years[basemap_years<=year])
-  return(basemap_year)
-}
-
-
-data.basemap_pm25 <- function(pop, res, year=2020, fill_na=T, use_cache=T, suffix=""){
-
-  basemap_year <- data.basemap_pm25_year(year)
+  basemap_year <- data.basemap_pm25_closest_year(year, version=version)
 
   f <- sprintf("cache/pm25_%s_%s%s.tif", basemap_year, res, suffix)
   if(file.exists(f) && use_cache){
     terra::rast(f)
   }else{
-    pm25 <- data.basemap_pm25_region("Global", year=basemap_year) %>%
+    pm25 <- data.basemap_pm25_region("Global", year=basemap_year, version=version) %>%
       terra::resample(pop, method='bilinear')
 
     # fill water bodies etc
@@ -172,8 +167,51 @@ data.basemap_pm25 <- function(pop, res, year=2020, fill_na=T, use_cache=T, suffi
   }
 }
 
+#' Find all available years from van Donkelaar in our gis/concentration folder
+#'
+#' @param version
+#'
+#' @returns
+#' @export
+#'
+#' @examples
+data.basemap_pm25_available_years <- function(version="5"){
+  basename <- switch(version,
+                     "5"="V5GL0502.HybridPM25.Global",
+                     "6"="V6GL02.02.CNNPM25.Global")
+  # Accept both .tif and .nc extensions
+  files <- list.files(creahelpers::get_concentration_path(), pattern=paste0(basename, ".*\\.(tif|nc)$"), full.names=FALSE)
+  # Example of file name: "V5GL0502.HybridPM25.Global.202301-202312.tif" or "V5GL0502.HybridPM25.Global.202301-202312.nc"
+  # Extract the year from the file name (regardless of extension)
+  years <- as.integer(stringr::str_match(files, "\\.(\\d{4})\\d{2}-\\d{4}\\d{2}\\.(tif|nc)$")[,2])
+  years <- unique(years[!is.na(years)])
+  return(years)
+}
 
-data.basemap_pm25_region <- function(region, year=2020, version="5"){
+
+#' Find the closest year for pm2.5
+#'
+#' @param year either the year integer, or mid2023mid2024 if from July to June
+#'
+#' @return
+#' @export
+#'
+#' @examples
+data.basemap_pm25_closest_year <- function(year, version){
+
+  if(str_detect(year, "^mid\\d{4}mid\\d{4}$")){
+    year <- as.numeric(str_match(year, "mid(\\d{4})mid")[2])
+  }else{
+    year <- as.numeric(year)
+  }
+
+  available_years <- data.basemap_pm25_available_years(version)
+  diffs <- abs(available_years - year)
+  closest_year <- available_years[which.min(diffs)]
+  return(first(closest_year))
+}
+
+data.basemap_pm25_region <- function(region="Global", year=2020, version="5"){
 
   # Version 6 is available but has weird artefacts in Bangladesh at least
   if(region != "Global") stop("Now we only use Global from now on")

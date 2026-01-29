@@ -1,19 +1,19 @@
-#' Build the ex
+#' Build the exposure maps for a given region, year, and model
 #'
-#' @param res
-#' @param pop
-#' @param polls
-#' @param suffix
-#' @param regions
-#' @param year
-#' @param force_rebuild
-#' @param use_cache_predictors
-#' @param obs
-#' @param obs_level
-#' @param model
-#' @param results_folder
-#' @param diagnostics_folder
-#' @param ...
+#' @param res Resolution of the grid to use (see constants.R)
+#' @param pop Population raster
+#' @param polls Pollutants to build maps for
+#' @param suffix Suffix to add to the results folder
+#' @param regions Regions to build maps for
+#' @param year Year to build maps for
+#' @param force_rebuild Whether to force the rebuild of the maps
+#' @param use_cache_predictors Whether to use the cached predictors
+#' @param obs Observations to use
+#' @param obs_level Level of the observations
+#' @param model Model to use
+#' @param results_folder Folder to save the results
+#' @param diagnostics_folder Folder to save the diagnostics
+#' @param ... Additional arguments to pass to the function
 #'
 #' @return
 #' @export
@@ -24,7 +24,7 @@ build_maps <- function(res,
                       polls = c("pm25", "no2"),
                       suffix = "",
                       regions = NULL,
-                      year = 2022,
+                      year = 2025,
                       force_rebuild = T,
                       use_cache_predictors = T,
                       obs = NULL,
@@ -33,6 +33,7 @@ build_maps <- function(res,
                       results_folder = file.path("results", model),
                       diagnostics_folder = "diagnostics",
                       formula=NULL,
+                      bbox=NULL,
 
                       # Masking options
                       limit_distance_urban = F,
@@ -63,7 +64,7 @@ build_maps <- function(res,
 
   # Diagnose predictors (well mainly plot them)
   diagnose_predictors(predictors = predictors,
-                      suffix = suffix,
+                      suffix = suffix_predictors,
                       formula = formula,
                       folder = diagnostics_folder)
 

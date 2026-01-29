@@ -103,14 +103,11 @@ diagnose_predictors <- function(predictors, formula=NULL, suffix="", folder="dia
 
   filepath <- file.path(folder, glue("predictors{suffix}.jpg"))
   jpeg(filepath, width=width, height=height, units="in", res=300)
+  #TODO: Check why it only exports 16 layers when we have more
   raster::plot(predictors, col=viridis::viridis(n_layers),
                       layout=c(ceiling(sqrt(n_layers)),
                                ceiling(sqrt(n_layers))))
   dev.off()
-
-
-
-
 }
 
 
