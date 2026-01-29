@@ -88,6 +88,7 @@ diagnose_results <- function(maps, polls, obs_w_predictors, suffix="", folder="d
 
 diagnose_predictors <- function(predictors, formula=NULL, suffix="", folder="diagnostics"){
 
+  dir.create(folder, showWarnings = FALSE, recursive = TRUE)
 
   if(!is.null(formula)){
     # Extract useful predictors from formula
