@@ -86,7 +86,7 @@ data.predictors <- function(pop, res, year, use_cache=T, suffix="", model=NULL){
     gadm0 = data.gadm_raster(pop, res, level=0, use_cache=use_cache, suffix=suffix),
     gadm1 = data.gadm_raster(pop, res, level=1, use_cache=use_cache, suffix=suffix),
     pm25_merra2_diff = data.pm25_merra2_diff(pop, res,
-                                             year_i=data.basemap_pm25_year(year),
+                                             year_i=data.basemap_pm25_closest_year(year),
                                              year_f=year,
                                              use_cache=use_cache, suffix=suffix),
     no2_omi_diff = data.no2_omi_diff(pop, res, year_f=year, use_cache=use_cache, suffix=suffix),
