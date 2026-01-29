@@ -197,7 +197,7 @@ data.basemap_pm25_available_years <- function(version="5"){
 #' @export
 #'
 #' @examples
-data.basemap_pm25_closest_year <- function(year, version){
+data.basemap_pm25_closest_year <- function(year, version="5"){
 
   if(str_detect(year, "^mid\\d{4}mid\\d{4}$")){
     year <- as.numeric(str_match(year, "mid(\\d{4})mid")[2])
