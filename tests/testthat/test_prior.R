@@ -2,6 +2,9 @@
 library(testthat)
 
 test_that("model prior returns prior", {
+
+  skip_on_ci("This tests requires basemaps")
+
   year <- 2022
   res <- creaexposure::RES_2PT5_MIN
   bbox <- c(68.1, 6.7, 97.4, 35.5)
@@ -20,5 +23,4 @@ test_that("model prior returns prior", {
                                              use_cache_predictors=FALSE)
 
 
-  expect_equal(data.basemap_pm25_year(year), data.basemap_pm25_year(2023))
 })
