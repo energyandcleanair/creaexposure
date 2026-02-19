@@ -4,7 +4,25 @@
 #' @param pop Population raster
 #' @param polls Pollutants to build maps for
 #' @param suffix Suffix to add to the results folder
-#' @param regions Regions to build maps for
+#' @param regions Regions to build maps for. Controls both the spatial extent
+#'   and how observations are grouped for model training. Three formats accepted:
+#'
+#'   - `NULL` (default): uses all predefined regions from `get_all_regions()`
+#'     (NA, IN, CN, EU, TR, SEA, JP, ZA, PH, TW, CL, AU). A separate model is
+#'     trained per region and results are mosaicked into a global map.
+#'
+#'   - Named list of ISO2 vectors: `list("IN" = "IN")` or
+#'     `list("SouthAsia" = c("IN", "PK", "BD"))`. Each name becomes a region
+#'     label — a separate model is trained using observations from the listed
+#'     countries. The spatial extent (bbox) is computed from the union of the
+#'     supplied country boundaries. Use this to define custom regions or run a
+#'     subset of countries.
+#'
+#'   - Single predefined region string: `"EU"`, `"IN"`, `"NA"`, etc. Looked up
+#'     in `get_all_regions()`.
+#'
+#'   Note: the region name (list key) is also used as a suffix for cached
+#'   predictor and result files.
 #' @param year Year to build maps for
 #' @param force_rebuild Whether to force the rebuild of the maps
 #' @param use_cache_predictors Whether to use the cached predictors
