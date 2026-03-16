@@ -74,12 +74,13 @@ data.get_obs <- function(level = "city", polls=c("pm25","no2"), year=2020, use_c
 #' @export
 #'
 #' @examples
-data.predictors <- function(pop, res, year, use_cache=T, suffix="", model=NULL){
+data.predictors <- function(pop, res, year, use_cache=T, suffix="", model=NULL,
+                            pm25_source="vandonkelaar", no2_source="larkin"){
 
 
   apredictors <- alist(
-    pm25_prior = data.basemap_pm25(pop, res, year=year, use_cache=use_cache, suffix=suffix),
-    no2_prior = data.basemap_no2(pop, res, use_cache=use_cache, suffix=suffix),
+    pm25_prior = data.basemap_pm25(pop, res, year=year, use_cache=use_cache, suffix=suffix, source=pm25_source),
+    no2_prior = data.basemap_no2(pop, res, use_cache=use_cache, suffix=suffix, source=no2_source),
     distance_coast = data.distance_coast(pop, res, use_cache=use_cache, suffix=suffix),
     distance_urban = data.distance_urban(pop, res, use_cache=use_cache, suffix=suffix),
     grump = data.grump(pop, res, use_cache=use_cache, suffix=suffix),
@@ -146,16 +147,20 @@ data.predictors <- function(pop, res, year, use_cache=T, suffix="", model=NULL){
 #' @export
 #'
 #' @examples
-data.basemap_pm25 <- function(pop, res, year=2020, fill_na=T, use_cache=T, suffix="", version="5"){
+data.basemap_pm25 <- function(pop, res, year=2020, fill_na=T, use_cache=T, suffix="",
+                              version="5", source="vandonkelaar"){
 
-  basemap_year <- data.basemap_pm25_closest_year(year, version=version)
+  # Map old version format ("5" -> "v5") for backward compat
+  if (!startsWith(version, "v")) version <- paste0("v", version)
+
+  basemap_year <- get_concentration_closest_year("pm25", source=source, year=year, version=version)
 
   f <- sprintf("cache/pm25_%s_%s%s.tif", basemap_year, res, suffix)
   if(file.exists(f) && use_cache){
     terra::rast(f)
   }else{
-    pm25 <- data.basemap_pm25_region("Global", year=basemap_year, version=version) %>%
-      terra::resample(pop, method='bilinear')
+    pm25 <- get_concentration("pm25", source=source, year=basemap_year, version=version,
+                              grid_raster=pop)
 
     # fill water bodies etc
     if(fill_na){
@@ -175,17 +180,9 @@ data.basemap_pm25 <- function(pop, res, year=2020, fill_na=T, use_cache=T, suffi
 #' @export
 #'
 #' @examples
-data.basemap_pm25_available_years <- function(version="5"){
-  basename <- switch(version,
-                     "5"="V5GL0502.HybridPM25.Global",
-                     "6"="V6GL02.02.CNNPM25.Global")
-  # Accept both .tif and .nc extensions
-  files <- list.files(creahelpers::get_concentration_path(), pattern=paste0(basename, ".*\\.(tif|nc)$"), full.names=FALSE)
-  # Example of file name: "V5GL0502.HybridPM25.Global.202301-202312.tif" or "V5GL0502.HybridPM25.Global.202301-202312.nc"
-  # Extract the year from the file name (regardless of extension)
-  years <- as.integer(stringr::str_match(files, "\\.(\\d{4})\\d{2}-\\d{4}\\d{2}\\.(tif|nc)$")[,2])
-  years <- unique(years[!is.na(years)])
-  return(years)
+data.basemap_pm25_available_years <- function(version="5", source="vandonkelaar"){
+  if (!startsWith(version, "v")) version <- paste0("v", version)
+  get_concentration_available_years("pm25", source=source, version=version)
 }
 
 
@@ -197,74 +194,26 @@ data.basemap_pm25_available_years <- function(version="5"){
 #' @export
 #'
 #' @examples
-data.basemap_pm25_closest_year <- function(year, version="5"){
-
-  if(str_detect(year, "^mid\\d{4}mid\\d{4}$")){
-    year <- as.numeric(str_match(year, "mid(\\d{4})mid")[2])
-  }else{
-    year <- as.numeric(year)
-  }
-
-  available_years <- data.basemap_pm25_available_years(version)
-  diffs <- abs(available_years - year)
-  closest_year <- available_years[which.min(diffs)]
-  return(first(closest_year))
+data.basemap_pm25_closest_year <- function(year, version="5", source="vandonkelaar"){
+  if (!startsWith(version, "v")) version <- paste0("v", version)
+  get_concentration_closest_year("pm25", source=source, year=year, version=version)
 }
 
+# Deprecated: use get_concentration("pm25", source="vandonkelaar", ...) instead
 data.basemap_pm25_region <- function(region="Global", year=2020, version="5"){
-
-  # Version 6 is available but has weird artefacts in Bangladesh at least
-  if(region != "Global") stop("Now we only use Global from now on")
-
-  basename <- switch(version,
-                     "5"="V5GL0502.HybridPM25.Global",
-                     "6"="V6GL02.02.CNNPM25.Global")
-
-  f_pm25_nc <- glue("{basename}.{year}01-{year}12.nc")
-  f_pm25_tif <- gsub("\\.nc","\\.tif", f_pm25_nc)
-
-  nc_to_tif <- function(f_pm25_nc, f_pm25_tif){
-    pm25.base <- raster::raster(creahelpers::get_concentration_path(f_pm25_nc))
-
-
-    raster::writeRaster(pm25.base,
-                        creahelpers::get_concentration_path(f_pm25_tif),
-                        overwrite=T)
-  }
-
-  if(!file.exists(creahelpers::get_concentration_path(f_pm25_tif))) nc_to_tif(f_pm25_nc, f_pm25_tif)
-
-  message("Using PM2.5 from ", f_pm25_tif)
-  pm25_map <- terra::rast(creahelpers::get_concentration_path(f_pm25_tif))
-  crs(pm25_map) <- sp::CRS('+init=epsg:4326')
-  return(pm25_map)
+  if (!startsWith(version, "v")) version <- paste0("v", version)
+  get_concentration("pm25", source="vandonkelaar", year=year, version=version)
 }
 
 
-data.basemap_no2 <- function(pop, res, use_cache=T, suffix=""){
+data.basemap_no2 <- function(pop, res, use_cache=T, suffix="", source="larkin"){
 
   f <- sprintf("cache/no2_ugm3_%s%s.tif", res, suffix)
   if(file.exists(f) && use_cache){
     terra::rast(f)
   }else{
-    f_no2 <- "Global_LUR_NO2_2011_16b_2.tif"
-    f_no2_agg10 <- "Global_LUR_NO2_2011_16b_2_agg10.tif"
-    f_no2_wsg84 <- "no2_agg10_ugm3_wsg84.tif"
-
-    if(!file.exists(creahelpers::get_concentration_path(f_no2_wsg84))){
-      no2 <- terra::rast(creahelpers::get_concentration_path(f_no2))
-      terra::NAflag(no2) <- 128
-      no2_agg10 <- terra::aggregate(no2, fact=10, cores=parallel::detectCores()-1)
-      terra::writeRaster(no2_agg10, creahelpers::get_concentration_path(f_no2_agg10),
-                         overwrite=T)
-      no2_wsg84 <- no2_agg10 %>% terra::project("epsg:4326") # Required for hia
-      no2_wsg84 <- no2_wsg84 * 1.88 # ppb to µg/m3 !!!
-      terra::writeRaster(no2_wsg84, creahelpers::get_concentration_path(f_no2_wsg84),
-                         overwrite=T)
-    }
-
-    no2 <- terra::rast(creahelpers::get_concentration_path(f_no2_wsg84)) %>%
-      terra::resample(pop) %>% terra::mask(pop)
+    no2 <- get_concentration("no2", source=source, grid_raster=pop) %>%
+      terra::mask(pop)
     terra::writeRaster(no2, f, overwrite=T)
     return(no2)
   }
@@ -384,11 +333,11 @@ data.pm25_merra2_diff <- function(pop, res, year_i=2020, year_f=2020, use_cache=
 
   if(!use_cache | !file.exists(f)){
 
-    pm25_merra2_i <- terra::rast(creahelpers::get_concentration_path(sprintf("pm25_merra2_%s.tif", year_i))) %>%
-      terra::resample(pop) %>% terra::mask(pop)
+    pm25_merra2_i <- get_concentration("pm25", source="merra2", year=year_i, grid_raster=pop) %>%
+      terra::mask(pop)
 
-    pm25_merra2_f <- terra::rast(creahelpers::get_concentration_path(sprintf("pm25_merra2_%s.tif", year_f))) %>%
-      terra::resample(pop) %>% terra::mask(pop)
+    pm25_merra2_f <- get_concentration("pm25", source="merra2", year=year_f, grid_raster=pop) %>%
+      terra::mask(pop)
 
     pm25_merra2_diff <- pm25_merra2_f - pm25_merra2_i
     pm25_merra2_diff <- pm25_merra2_diff * 1E10 # Scaling a bit...
@@ -405,11 +354,11 @@ data.no2_omi_diff <- function(pop, res, year_i=2011, year_f=2019, use_cache=T, s
 
   if(!use_cache | !file.exists(f)){
 
-    omi_i <- terra::rast(creahelpers::get_concentration_path(sprintf("no2_omi_%s.tif", year_i))) %>%
-      terra::resample(pop) %>% terra::mask(pop)
+    omi_i <- get_concentration("no2", source="omi", year=year_i, grid_raster=pop) %>%
+      terra::mask(pop)
 
-    omi_f <- terra::rast(creahelpers::get_concentration_path(sprintf("no2_omi_%s.tif", year_f))) %>%
-      terra::resample(pop) %>% terra::mask(pop)
+    omi_f <- get_concentration("no2", source="omi", year=year_f, grid_raster=pop) %>%
+      terra::mask(pop)
 
     no2_omi_diff <- omi_f - omi_i
     no2_omi_diff <- no2_omi_diff / 1E15 # Scaling a bit...
@@ -902,8 +851,8 @@ data.pm25_ss_dust_frac <- function(pop, res, use_cache=T, suffix=""){
   if(file.exists(f) && use_cache){
     terra::rast(f)
   }else{
-    pm25_w_ssd <- terra::rast(creahelpers::get_concentration_path("ACAG_PM25_GWR_V4GL03_201901_201912_0p01.tif"))
-    pm25_wo_ssd <- terra::rast(creahelpers::get_concentration_path("ACAG_PM25_noDUSTnoSEASALT_GWR_V4GL03_201901_201912_0p01.tif"))
+    pm25_w_ssd <- get_concentration("pm25", source="vandonkelaar", version="v4", year=2019)
+    pm25_wo_ssd <- get_concentration("pm25", source="vandonkelaar", version="v4", year=2019, variant="no_ssdust")
     ss_dust_frac <- (pm25_w_ssd - pm25_wo_ssd)/ pm25_w_ssd
     ss_dust_frac <- ss_dust_frac %>% terra::resample(terra::rast(pop))
     terra::writeRaster(ss_dust_frac, f, overwrite=T)
@@ -927,8 +876,8 @@ data.pm25_ss_dust <- function(pop, res, use_cache=T, suffix=""){
   if(file.exists(f) && use_cache){
     terra::rast(f)
   }else{
-    pm25_w_ssd <- terra::rast(creahelpers::get_concentration_path("ACAG_PM25_GWR_V4GL03_201901_201912_0p01.tif"))
-    pm25_wo_ssd <- terra::rast(creahelpers::get_concentration_path("ACAG_PM25_noDUSTnoSEASALT_GWR_V4GL03_201901_201912_0p01.tif"))
+    pm25_w_ssd <- get_concentration("pm25", source="vandonkelaar", version="v4", year=2019)
+    pm25_wo_ssd <- get_concentration("pm25", source="vandonkelaar", version="v4", year=2019, variant="no_ssdust")
     ss_dust <- pm25_w_ssd - pm25_wo_ssd
     ss_dust <- ss_dust %>% terra::resample(terra::rast(pop))
     terra::writeRaster(ss_dust, f, overwrite=T)

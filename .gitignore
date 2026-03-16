@@ -1,5 +1,8 @@
 data/
 results/
+diagnostics/
+projects/
+rosm.cache/
 .vscode/
 .lintr
 

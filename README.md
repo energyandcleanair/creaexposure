@@ -1,86 +1,211 @@
 # creaexposure
 
-R package for building observation-adjusted air pollution exposure maps (PM2.5 and NO2). Combines satellite-derived prior maps with ground-based observations using GAM or Random Forest models to produce locally-corrected exposure estimates at multiple resolutions.
+`creaexposure` is a CREA R package responsible for two things:
 
-## What it does
+1. **Concentration retrieval** — unified API to access baseline concentration maps (PM2.5, NO2, O3) from multiple sources. It is used for instance in `creahia`.
+2. **Concentration map updates** — builds either:
+   - observation-adjusted concentration maps by existing priors with ground observations using GAM/RF models
+   - standard-adjusted concentration maps by devising realistic concentration maps matching a regulatory target given historical conditions.
 
-- Loads prior basemaps (van Donkelaar PM2.5, Larkin NO2) as spatial baselines
-- Retrieves ground observations from CREADB via `rcrea`
-- Trains GAM or Random Forest models to predict the spatial adjustment (observation minus prior) across unobserved locations
-- Applies masking to limit extrapolation far from stations or urban areas
-- Outputs adjusted raster maps with diagnostics and validation plots
+```r
+# Get PM2.5 concentration map for 2022 (van Donkelaar v5)
+r <- get_concentration("pm25", source = "vandonkelaar", version = "v5", year = 2022)
 
-**Resolutions:** 30 arcsec (~1 km), 2.5 min (~5 km), 15 min (~27 km), 1 degree
+# Get NO2 (Larkin) scaled to 2023 via OMI ratio
+r <- get_concentration("no2", source = "larkin", scale_year = 2023)
+
+# Check unit
+terra::units(r)  # "µg/m3"
+```
 
 ## Setup
+The concentration maps are stored in CREA's GIS folder on Google Cloud Storage and typically synced in a local folder for the user to access them.
 
-Environment variable (`.Renviron`):
+### Sync local folder with online bucket
+You first need to set up your local GIS folder root, using: 
 ```bash
-GIS_DIR=~/gis   # path to GIS data directory
+# .Renviron
+GIS_DIR=~/gis
 ```
 
-Expected GIS directory structure:
-```
-$GIS_DIR/
-├── concentration/      # Prior maps + MERRA2/OMI yearly rasters
-├── population/         # Population density rasters
-├── elevation/          # SRTM elevation
-├── boundaries/         # Distance-to-coast
-└── landcover/          # Urban distance, GRUMP
+To synchronise your whole gis folder with CREA's GCS, you should run:
+```bash
+source .Renviron
+gsutil -m rsync -r $GIS_DIR gs://crea-data/gis
+gsutil -m rsync -r gs://crea-data/gis $GIS_DIR
 ```
 
-## Quick start
+If you'd like to synchronise your concentration folder only, use:
+```bash
+source .Renviron
+gsutil -m rsync -r $GIS_DIR/concentration gs://crea-data/gis/concentration
+gsutil -m rsync -r gs://crea-data/gis/concentration $GIS_DIR/concentration
+```
+
+### Instal creaexposure package
+```r
+remotes::install_github("energyandcleanair/creaexposure")
+```
+
+## Concentration API
+
+`creaexposure` offers a single entry point to retrieve any baseline concentration map:
+
+```r
+# PM2.5 (van Donkelaar v5, latest year)
+r <- get_concentration("pm25")
+
+# PM2.5 for a specific year/version
+r <- get_concentration("pm25", source = "vandonkelaar", version = "v5", year = 2022)
+
+# NO2 (Larkin, temporally scaled to 2023 via OMI ratio)
+r <- get_concentration("no2", source = "larkin", scale_year = 2023)
+
+# O3 (GEOSChem, specific layer)
+r <- get_concentration("o3", source = "geoschem", variant = "sm8h")
+
+# PM2.5 without sea salt/dust (ACAG = vandonkelaar v4)
+r <- get_concentration("pm25", source = "vandonkelaar", version = "v4", variant = "no_ssdust")
+
+# Available years
+get_concentration_available_years("pm25", source = "vandonkelaar")
+get_concentration_closest_year("pm25", source = "vandonkelaar", year = 2023)
+```
+
+### Sources
+
+| Pollutant | Source | Versions | Unit | Notes |
+|-----------|--------|----------|------|-------|
+| PM2.5 | `vandonkelaar` (default) | `v5` (default), `v6`, `v4` | µg/m3 | v4 = ACAG, supports `no_ssdust` variant |
+| PM2.5 | `merra2` | `default` | kg/m3 | Used as relative predictor (temporal diff) |
+| PM2.5 | `tap` | `china` | µg/m3 | China 1km from tapdata.org.cn |
+| NO2 | `larkin` (default) | `default` | µg/m3 | Single year (2011), use `scale_year` for temporal adjustment |
+| NO2 | `omi` | `default` | molecules/cm2 | Used as ratio for temporal scaling |
+| NO2 | `tap` | `china` | µg/m3 | China 1km from tapdata.org.cn |
+| O3 | `geoschem` (default) | `default` | unknown | Variants: `m3m` (default), `sm8h` |
+
+Units are stored in the registry and set on the returned `SpatRaster` via `terra::units(r)`.
+
+### Parameters
+
+- **`source`** — data provider. If NULL, uses pollutant default.
+- **`version`** — dataset version (e.g. `v5`, `v6`, `v4`). If NULL, uses source default.
+- **`variant`** — dataset variant for sub-products (e.g. `no_ssdust`, `m3m`/`sm8h`).
+- **`scale_year`** — applies temporal scaling (NO2 larkin: multiplicative OMI ratio).
+- **`grid_raster`** — optional SpatRaster to resample the result to.
+
+## Folder structure
+
+All concentration data lives under `$GIS_DIR/concentration/`:
+
+```
+$GIS_DIR/concentration/
+├── pm25/
+│   ├── vandonkelaar/
+│   │   ├── v5/    V5GL0502.HybridPM25.Global.{YYYY}01-{YYYY}12.tif, SOURCE.md
+│   │   ├── v6/    V6GL02.02.CNNPM25.Global.{YYYY}01-{YYYY}12.tif, SOURCE.md
+│   │   └── v4/    ACAG_PM25_GWR_V4GL03_{YYYY}01_{YYYY}12_0p01.tif, SOURCE.md
+│   ├── merra2/
+│   │   └── default/   pm25_merra2_{YYYY}.tif, SOURCE.md
+│   └── tap/
+│       └── china/     {YYYY}.tif, SOURCE.md
+├── no2/
+│   ├── larkin/
+│   │   └── default/   no2_agg10_ugm3_wsg84.tif, SOURCE.md
+│   ├── omi/
+│   │   └── default/   no2_omi_{YYYY}.tif, SOURCE.md
+│   └── tap/
+│       └── china/     {YYYY}.tif, SOURCE.md
+├── o3/
+│   └── geoschem/
+│       └── default/   o3_m3m.tif, o3_sm8h.tif, SOURCE.md
+├── [legacy flat files kept for backward compat]
+└── tap/
+    └── urls.txt       (TAP download links)
+```
+
+Files keep their **original filenames** for traceability. The folder hierarchy provides the structure.
+
+Each version folder contains a `SOURCE.md` file documenting the data provenance (URL, coverage, resolution, unit, processing). When adding a new dataset, always create a `SOURCE.md` in its version folder.
+
+### Processing raw data
+
+Each source has a `process_*()` function that converts raw formats (.nc, .grd) to .tif:
+
+```r
+process_vandonkelaar(year = 2023, version = "v5")  # .nc → .tif
+process_larkin()                                     # aggregate, reproject, ppb→ug/m3
+process_geoschem()                                   # extract M3M/SM8h layers from .nc
+process_omi(year = 2023)                             # copy from legacy location
+process_merra2(year = 2023)                          # copy from legacy location
+process_tap(year = 2023)                             # download, rasterize, gap-fill
+```
+
+## Exposure maps
+
+Builds observation-adjusted maps by training models on the residual (observed − prior):
 
 ```r
 maps <- build_maps(
-  res       = "2pt5_min",
-  regions   = list("India" = "IN"),
-  polls     = c("pm25", "no2"),
-  year      = 2022,
-  model     = "rf"
+  res     = "2pt5_min",
+  regions = list("India" = "IN"),
+  polls   = c("pm25", "no2"),
+  year    = 2022,
+  model   = "rf"
 )
-
-maps$maps$pm25        # adjusted raster
-maps$diagnostics      # validation plots
 ```
 
-## Predictors
+**Resolutions:** 30 arcsec (~1 km), 2.5 min (~5 km), 15 min (~27 km), 1 degree
 
-Below are currently available predictors:
+### Predictors
 
 | Name | Description | Source |
 |------|-------------|--------|
-| `pm25_prior` | PM2.5 satellite-derived baseline | van Donkelaar Global HybridPM2.5 |
-| `no2_prior` | NO2 baseline | Larkin Global LUR NO2 (2011) |
-| `pm25_merra2_diff` | PM2.5 temporal change: prior year → target year | MERRA2 (`gis/concentration/pm25_merra2_{year}.tif`) |
-| `no2_omi_diff` | NO2 temporal change: 2011 → target year | OMI (`gis/concentration/no2_omi_{year}.tif`) |
-| `pop` | Population density | GPW v4 2020 |
-| `pop_05deg` | Population density smoothed at 0.5° | GPW v4 2020 |
-| `pop_ratio_log` | Log population growth ratio 2010→2020 | GPW v4 |
-| `srtm` | Elevation | SRTM 1km |
-| `srtm_05deg` | Elevation smoothed at 0.5° | SRTM |
-| `srtm_diff05deg` | Local elevation minus 0.5° background (topographic relief) | SRTM |
-| `distance_urban` | Distance to nearest urban area | GRUMP v1 |
-| `grump` | Urban/rural classification | GRUMP v1 |
-| `distance_coast` | Distance to coastline | NASA Ocean Color |
-| `gadm0` | Country-level admin boundary (rasterized) | GADM |
-| `gadm1` | Sub-national admin boundary (rasterized) | GADM |
-| `lon` / `lat` | Coordinates | — |
+| `pm25_prior` | PM2.5 baseline | van Donkelaar |
+| `no2_prior` | NO2 baseline | Larkin (scaled via OMI) |
+| `pm25_merra2_diff` | PM2.5 temporal change | MERRA2 |
+| `no2_omi_diff` | NO2 temporal change | OMI |
+| `pop`, `pop_05deg` | Population density | GPW v4 |
+| `pop_ratio_log` | Population growth 2010→2020 | GPW v4 |
+| `srtm`, `srtm_05deg`, `srtm_diff05deg` | Elevation / relief | SRTM |
+| `distance_urban`, `grump` | Urban proximity | GRUMP v1 |
+| `distance_coast` | Coastline distance | NASA |
+| `gadm0`, `gadm1` | Admin boundaries | GADM |
+| `lon`, `lat` | Coordinates | — |
 
+## Adding a new concentration source
 
-## Generate MERRA2 PM2.5 (`pm25_merra2_{year}`) and OMI NO2 (`no2_omi_{year}`) rasters
-Predictors for PM2.5 and NO2 exposure maps include MERRA2 PM2.5 and OMI NO2 respectively. Namely, we consider the difference between:
-- the year we're aiming to build an exposure map for
-- the latest/closest year available from PM2.5 and NO2 priors (i.e. van Donkelaar and Larkin respectively)
+Checklist for adding a new dataset to the concentration API:
 
-To build these yearly maps, if not already available in the GIS folder (`concentration` subfolder), visit https://giovanni.gsfc.nasa.gov/giovanni/
+1. **Create `R/process_<source>.R`** — function that converts raw data to `.tif`
+   - Output to `$GIS_DIR/concentration/{pollutant}/{source}/{version}/`
+   - Use `.concentration_dir()` to build the output path
+   - Skip if output already exists
+   - Clean up raw downloads after processing
 
-Here are the datasets you need to build yearly-averaged maps of:
-- PM2.5: Total Surface Mass Concentration - PM 2.5 M2TMNXAER v5.12.4
-- NO2: NO2 Tropospheric Column (30% Cloud Screened) (OMNO2d v003)
+2. **Register in `.concentration_sources`** (in `R/concentration.R`)
+   - Add entry under the pollutant with `default_version`, and for each version:
+     - `unit` — the unit of the raster values (e.g. `"µg/m3"`)
+     - `year_regex` — regex to discover years from filenames (or `NULL` if yearless)
+     - `file_template` — function(year, variant) returning the `.tif` filename
+     - `fixed_years` — if the source only covers specific years
+   - If this should be the default source for a pollutant, update `.default_sources`
 
-Once built, download in `.tif` format and copy the files in `gis/concentration` with the names:
-- PM2.5: pm25_merra2_{year}.tif
-- NO2: no2_omi_{year}.tif
+3. **Create `SOURCE.md`** in the version folder with:
+   - URL / download instructions
+   - Coverage (global, China, etc.)
+   - Resolution
+   - Unit
+   - Processing function reference
 
-These files will be used by `data.pm25_merra2_diff` and `data.no2_omi_diff` respectively.
+4. **Update the sources table** in this README
+
+5. **Test**
+   ```r
+   process_newsource(year = 2023)
+   r <- get_concentration("pm25", source = "newsource")
+   terra::units(r)  # should return the registered unit
+   get_concentration_available_years("pm25", source = "newsource")
+   ```
+
+```
