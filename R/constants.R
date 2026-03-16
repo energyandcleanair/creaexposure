@@ -9,3 +9,4 @@ RES_COARSE = RES_1_DEG
 
 MODEL_GAM = "gam"
 MODEL_RF = "rf"
+MODEL_PRIOR = "prior"

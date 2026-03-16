@@ -3,7 +3,7 @@ library(testthat)
 
 test_that("model prior returns prior", {
 
-  skip_on_ci("This tests requires basemaps")
+  skip_on_ci()
 
   year <- 2022
   res <- creaexposure::RES_2PT5_MIN

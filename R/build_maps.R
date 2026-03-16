@@ -111,18 +111,22 @@ build_maps <- function(res,
                    ...) -> maps[[poll]]
   }
 
-  # Run diagnostics on results
-  diagnostics <- diagnose_results(
-    maps = maps,
-    polls = polls,
-    obs_w_predictors = obs_w_predictors,
-    suffix = suffix,
-    folder = diagnostics_folder)
+  diagnostics <- NULL
+  maps_plots <- NULL
 
+  if (nrow(obs) > 0) {
+    # Run diagnostics on results
+    diagnostics <- diagnose_results(
+      maps = maps,
+      polls = polls,
+      obs_w_predictors = obs_w_predictors,
+      suffix = suffix,
+      folder = diagnostics_folder)
 
-  # Postcompute e.g. plot maps
-  units <- obs %>% distinct(poll, unit) %>% deframe()
-  maps_plots <- plot_maps(maps=maps, units=units)
+    # Postcompute e.g. plot maps
+    units <- obs %>% distinct(poll, unit) %>% deframe()
+    maps_plots <- plot_maps(maps=maps, units=units)
+  }
 
   return(list(
     maps = maps,

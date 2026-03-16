@@ -156,6 +156,7 @@ data.basemap_pm25 <- function(pop, res, year=2020, fill_na=T, use_cache=T, suffi
   basemap_year <- get_concentration_closest_year("pm25", source=source, year=year, version=version)
 
   f <- sprintf("cache/pm25_%s_%s%s.tif", basemap_year, res, suffix)
+  dir.create(dirname(f), showWarnings = FALSE, recursive = TRUE)
   if(file.exists(f) && use_cache){
     terra::rast(f)
   }else{

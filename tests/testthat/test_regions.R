@@ -23,7 +23,7 @@ test_that("Add region to measurements works", {
 
   # Default
   meas_w_obs_default <- add_region_to_obs(meas)
-  expect_equal(meas_w_obs$region, c("IN", "CN", "EU", NA))
+  expect_equal(meas_w_obs_default$region, c("IN", "CN", "EU", NA))
 })
 
 

@@ -115,7 +115,7 @@ test_that("merra2 file template works", {
 })
 
 test_that("tap file template works", {
-  config <- creaexposure:::.get_version_config("pm25", "tap", "default")
+  config <- creaexposure:::.get_version_config("pm25", "tap", "china")
   expect_equal(config$file_template(2023), "2023.tif")
 })
 

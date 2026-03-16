@@ -36,6 +36,7 @@ utils.to_raster <- function(x){
 }
 
 utils.add_predictors <- function(obs, predictors){
+  if (nrow(obs) == 0) return(obs)
   cbind(obs, raster::extract(predictors, sf::st_as_sf(obs)))
 }
 
