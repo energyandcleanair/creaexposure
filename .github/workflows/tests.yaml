@@ -11,7 +11,7 @@ jobs:
   testthat:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/energyandcleanair/creaexposure/ci-image:latest
+      image: ghcr.io/energyandcleanair/creaexposure/ci-image:${{ github.ref_name }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
