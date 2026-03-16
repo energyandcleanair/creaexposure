@@ -5,6 +5,7 @@ on:
     branches: [ master, feat/new_exposure_folder_structure ]
     paths:
       - 'Dockerfile.ci'
+      - 'tests/gcs_test_files.txt'
   workflow_dispatch:
 
 jobs:

@@ -1,0 +1,8 @@
+# GCS files required for CI tests (one path per line, relative to gs://crea-data/gis/)
+# Used by Dockerfile.ci to download only what's needed for testing.
+# Add new lines here when tests require additional data files.
+#
+# Required by: test_year.R ("Mid-year works")
+concentration/pm25/vandonkelaar/v5/V5GL0502.HybridPM25.Global.202301-202312.tif
+# Required by: test_year.R ("Predictors exist mid-year")
+concentration/pm25/merra2/default/pm25_merra2_mid2023mid2024.tif

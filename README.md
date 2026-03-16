@@ -107,6 +107,10 @@ It contains:
 
 The test workflow runs `devtools::test()` inside this container with `GIS_DIR=/work/gis`. Tests **require** the GIS data to be present and will fail without it.
 
+### Test data manifest
+
+The CI image only downloads the specific GCS files listed in [tests/gcs_test_files.txt](tests/gcs_test_files.txt). To add data for new tests, append the path (relative to `gs://crea-data/gis/`) to that file — the Dockerfile reads it automatically.
+
 ### GCS authentication
 
 The Docker build downloads data using a GCP service account key (same one used by creahia — both access `gs://crea-data/gis/`).
