@@ -71,6 +71,9 @@ RUN mkdir -p $GIS_DIR/concentration
 # Optionally download concentration data from GCS
 ARG DOWNLOAD_GIS_DATA=false
 
+# Only download the specific files used by tests:
+#   - pm25/vandonkelaar/v5: one year (2023) for get_concentration_available_years
+#   - pm25/merra2/default:  mid-year file for predictor existence check
 RUN --mount=type=secret,id=gcs-service-account-key \
     if [ "$DOWNLOAD_GIS_DATA" = "true" ]; then \
         echo "=== Installing gsutil ===" && \
@@ -80,13 +83,18 @@ RUN --mount=type=secret,id=gcs-service-account-key \
             echo "Decoding service account key..." && \
             cat /run/secrets/gcs-service-account-key | base64 -d > /tmp/gcs-key.json && \
             export GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcs-key.json && \
-            GS_OPTS='-o "Credentials:gs_service_key_file=/tmp/gcs-key.json"' && \
-            echo "Downloading concentration data..." && \
-            gsutil -o "Credentials:gs_service_key_file=/tmp/gcs-key.json" -m rsync -r \
-                gs://crea-data/gis/concentration/ \
-                $GIS_DIR/concentration/ && \
+            mkdir -p $GIS_DIR/concentration/pm25/vandonkelaar/v5 \
+                     $GIS_DIR/concentration/pm25/merra2/default && \
+            echo "Downloading vandonkelaar v5 (2023 only)..." && \
+            gsutil -o "Credentials:gs_service_key_file=/tmp/gcs-key.json" cp \
+                "gs://crea-data/gis/concentration/pm25/vandonkelaar/v5/V5GL0502.HybridPM25.Global.202301-202312.tif" \
+                $GIS_DIR/concentration/pm25/vandonkelaar/v5/ && \
+            echo "Downloading merra2 mid-year file..." && \
+            gsutil -o "Credentials:gs_service_key_file=/tmp/gcs-key.json" cp \
+                "gs://crea-data/gis/concentration/pm25/merra2/default/pm25_merra2_mid2023mid2024.tif" \
+                $GIS_DIR/concentration/pm25/merra2/default/ && \
             echo "=== GCS DOWNLOAD COMPLETE ===" && \
-            find $GIS_DIR/concentration -type f | head -20 && \
+            find $GIS_DIR/concentration -type f && \
             rm -f /tmp/gcs-key.json; \
         else \
             echo "No GCS key provided"; \

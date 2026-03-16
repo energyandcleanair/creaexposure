@@ -88,6 +88,41 @@ Units are stored in the registry and set on the returned `SpatRaster` via `terra
 - **`scale_year`** — applies temporal scaling (NO2 larkin: multiplicative OMI ratio). Only available for certain datasets.
 - **`grid_raster`** — optional SpatRaster to resample the result to.
 
+## CI / Testing
+
+Tests run inside a Docker image that has concentration data baked in from Google Cloud Storage, similar to [creahia](https://github.com/energyandcleanair/creahia).
+
+### CI image
+
+The image is built by the **Build CI Docker Image** workflow and published to:
+
+```
+ghcr.io/energyandcleanair/creaexposure/ci-image
+```
+
+It contains:
+- R 4.4.1 with geospatial system libraries (GDAL, GEOS, PROJ, etc.)
+- Pre-installed R dependencies (`creahelpers`, `rcrea`, etc.)
+- Concentration data synced from `gs://crea-data/gis/concentration/` into `/work/gis/concentration/`
+
+The test workflow runs `devtools::test()` inside this container with `GIS_DIR=/work/gis`. Tests **require** the GIS data to be present and will fail without it.
+
+### GCS authentication
+
+The Docker build downloads data using a GCP service account key (same one used by creahia — both access `gs://crea-data/gis/`).
+
+To set it up:
+
+1. Base64-encode the service account JSON key:
+   ```bash
+   cat path/to/crea-aq-data-XXXX.json | base64
+   ```
+2. Add the output as a GitHub repository secret named **`GCS_SERVICE_ACCOUNT_KEY`** (Settings > Secrets and variables > Actions).
+
+### Rebuilding the CI image
+
+The image rebuilds automatically when `Dockerfile.ci` is pushed to `master`. It can also be triggered manually via the GitHub Actions UI.
+
 ## Adding a new concentration source
 
 See [docs/adding-a-concentration-source.md](docs/adding-a-concentration-source.md).
