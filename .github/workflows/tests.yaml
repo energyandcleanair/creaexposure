@@ -10,17 +10,31 @@ on:
 jobs:
   testthat:
     runs-on: ubuntu-latest
-    env:
-      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
-      R_KEEP_PKG_SOURCE: yes
+    container:
+      image: ghcr.io/energyandcleanair/creaexposure/ci-image:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      env:
+        GIS_DIR: /work/gis
+        CI: true
+
     steps:
       - uses: actions/checkout@v4
-      - uses: r-lib/actions/setup-r@v2
-        with:
-          use-public-rspm: true
-      - uses: r-lib/actions/setup-r-dependencies@v2
-        with:
-          extra-packages: any::testthat
-          needs: testthat
-      - name: Run testthat
-        run: Rscript -e 'testthat::test_local()'
+
+      - name: Check GIS data availability
+        run: |
+          if [ -d "$GIS_DIR/concentration" ]; then
+            echo "GIS concentration data found in CI image:"
+            find $GIS_DIR/concentration -type f | head -20
+          else
+            echo "No concentration data in CI image — tests requiring data will skip"
+          fi
+
+      - name: Install dependencies (no upgrade)
+        run: |
+          Rscript -e 'pak::local_install_deps(".", ask = FALSE, upgrade = FALSE)'
+
+      - name: Run tests
+        run: |
+          Rscript -e 'devtools::test(stop_on_failure = TRUE)'

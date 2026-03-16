@@ -1,0 +1,68 @@
+name: Build CI Docker Image
+
+on:
+  push:
+    branches: [ master, feat/new_exposure_folder_structure ]
+    paths:
+      - 'Dockerfile.ci'
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Google Cloud authentication (if available)
+        id: gcs-auth
+        run: |
+          if [ ! -z "${{ secrets.GCS_SERVICE_ACCOUNT_KEY }}" ]; then
+            echo '${{ secrets.GCS_SERVICE_ACCOUNT_KEY }}' | base64 -d > /tmp/gcs-key.json
+            echo "gcs_key_available=true" >> $GITHUB_OUTPUT
+            echo "GCS authentication configured for Docker build"
+          else
+            echo "gcs_key_available=false" >> $GITHUB_OUTPUT
+            echo "No GCS credentials available, Docker build will skip GIS data download"
+          fi
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/energyandcleanair/creaexposure/ci-image
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.ci
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            DOWNLOAD_GIS_DATA=${{ steps.gcs-auth.outputs.gcs_key_available }}
+          secrets: |
+            github-token=${{ secrets.GITHUB_TOKEN }}
+            github-pat=${{ secrets.GITHUB_TOKEN }}
+            gcs-service-account-key=${{ secrets.GCS_SERVICE_ACCOUNT_KEY }}
