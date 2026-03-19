@@ -1,86 +1,134 @@
 # creaexposure
 
-R package for building observation-adjusted air pollution exposure maps (PM2.5 and NO2). Combines satellite-derived prior maps with ground-based observations using GAM or Random Forest models to produce locally-corrected exposure estimates at multiple resolutions.
+`creaexposure` is a CREA R package responsible for three things:
 
-## What it does
+1. **Concentration retrieval** — unified API to access baseline concentration maps (PM2.5, NO2, O3) from multiple sources. It is used for instance in `creahia`.
+2. **[Observation-adjusted concentration maps](docs/observation-adjusted-maps.md)** — fuse baseline priors with ground observations using GAM/RF models.
+3. **[Standard-adjusted concentration maps](docs/standard-adjusted-maps.md)** — devise realistic concentration maps matching a regulatory target given historical trends.
 
-- Loads prior basemaps (van Donkelaar PM2.5, Larkin NO2) as spatial baselines
-- Retrieves ground observations from CREADB via `rcrea`
-- Trains GAM or Random Forest models to predict the spatial adjustment (observation minus prior) across unobserved locations
-- Applies masking to limit extrapolation far from stations or urban areas
-- Outputs adjusted raster maps with diagnostics and validation plots
-
-**Resolutions:** 30 arcsec (~1 km), 2.5 min (~5 km), 15 min (~27 km), 1 degree
+```r
+r <- get_concentration("pm25", source = "vandonkelaar", version = "v5", year = 2022)
+```
 
 ## Setup
 
-Environment variable (`.Renviron`):
+### Install creaexposure package
+```r
+remotes::install_github("energyandcleanair/creaexposure")
+```
+
+### Sync local folder with online bucket
+
+The concentration maps are stored in CREA's GIS folder on Google Cloud Storage and typically synced in a local folder for the user to access them.
+
+You first need to set up your local GIS folder root, using:
 ```bash
-GIS_DIR=~/gis   # path to GIS data directory
+# .Renviron
+GIS_DIR=~/gis
 ```
 
-Expected GIS directory structure:
-```
-$GIS_DIR/
-├── concentration/      # Prior maps + MERRA2/OMI yearly rasters
-├── population/         # Population density rasters
-├── elevation/          # SRTM elevation
-├── boundaries/         # Distance-to-coast
-└── landcover/          # Urban distance, GRUMP
+To synchronise your whole gis folder with CREA's GCS, you should run:
+```bash
+source .Renviron
+gsutil -m rsync -r $GIS_DIR gs://crea-data/gis
+gsutil -m rsync -r gs://crea-data/gis $GIS_DIR
 ```
 
-## Quick start
+If you'd like to synchronise your concentration folder only, use:
+```bash
+source .Renviron
+gsutil -m rsync -r $GIS_DIR/concentration gs://crea-data/gis/concentration
+gsutil -m rsync -r gs://crea-data/gis/concentration $GIS_DIR/concentration
+```
+
+## Usage
+
+`creaexposure` offers a single entry point to retrieve any baseline concentration map:
 
 ```r
-maps <- build_maps(
-  res       = "2pt5_min",
-  regions   = list("India" = "IN"),
-  polls     = c("pm25", "no2"),
-  year      = 2022,
-  model     = "rf"
-)
+# PM2.5 (van Donkelaar v5, latest year)
+r <- get_concentration("pm25")
 
-maps$maps$pm25        # adjusted raster
-maps$diagnostics      # validation plots
+# PM2.5 for a specific year/version
+r <- get_concentration("pm25", source = "vandonkelaar", version = "v5", year = 2022)
+
+# NO2 (Larkin, temporally scaled to 2023 via OMI ratio)
+r <- get_concentration("no2", source = "larkin", scale_year = 2023)
+
+# O3 (GEOSChem, specific layer)
+r <- get_concentration("o3", source = "geoschem", variant = "sm8h")
+
+# PM2.5 without sea salt/dust (ACAG = vandonkelaar v4)
+r <- get_concentration("pm25", source = "vandonkelaar", version = "v4", variant = "no_ssdust")
+
+# Available years
+get_concentration_available_years("pm25", source = "vandonkelaar")
+get_concentration_closest_year("pm25", source = "vandonkelaar", year = 2023)
 ```
 
-## Predictors
+### Sources
 
-Below are currently available predictors:
+| Pollutant | Source | Versions | Unit | Notes |
+|-----------|--------|----------|------|-------|
+| PM2.5 | `vandonkelaar` (default) | `v5` (default), `v6`, `v4` | µg/m3 | v4 = ACAG, supports `no_ssdust` variant |
+| PM2.5 | `merra2` | `default` | kg/m3 | Used as relative predictor (temporal diff) |
+| PM2.5 | `tap` | `china` | µg/m3 | China 1km from tapdata.org.cn |
+| NO2 | `larkin` (default) | `default` | µg/m3 | Single year (2011), use `scale_year` for temporal adjustment |
+| NO2 | `omi` | `default` | molecules/cm2 | Used as ratio for temporal scaling |
+| NO2 | `tap` | `china` | µg/m3 | China 1km from tapdata.org.cn |
+| O3 | `geoschem` (default) | `default` | unknown | Variants: `m3m` (default), `sm8h` |
 
-| Name | Description | Source |
-|------|-------------|--------|
-| `pm25_prior` | PM2.5 satellite-derived baseline | van Donkelaar Global HybridPM2.5 |
-| `no2_prior` | NO2 baseline | Larkin Global LUR NO2 (2011) |
-| `pm25_merra2_diff` | PM2.5 temporal change: prior year → target year | MERRA2 (`gis/concentration/pm25_merra2_{year}.tif`) |
-| `no2_omi_diff` | NO2 temporal change: 2011 → target year | OMI (`gis/concentration/no2_omi_{year}.tif`) |
-| `pop` | Population density | GPW v4 2020 |
-| `pop_05deg` | Population density smoothed at 0.5° | GPW v4 2020 |
-| `pop_ratio_log` | Log population growth ratio 2010→2020 | GPW v4 |
-| `srtm` | Elevation | SRTM 1km |
-| `srtm_05deg` | Elevation smoothed at 0.5° | SRTM |
-| `srtm_diff05deg` | Local elevation minus 0.5° background (topographic relief) | SRTM |
-| `distance_urban` | Distance to nearest urban area | GRUMP v1 |
-| `grump` | Urban/rural classification | GRUMP v1 |
-| `distance_coast` | Distance to coastline | NASA Ocean Color |
-| `gadm0` | Country-level admin boundary (rasterized) | GADM |
-| `gadm1` | Sub-national admin boundary (rasterized) | GADM |
-| `lon` / `lat` | Coordinates | — |
+Units are stored in the registry and set on the returned `SpatRaster` via `terra::units(r)`.
+
+## Adding a new concentration source
+
+See [docs/adding-a-concentration-source.md](docs/adding-a-concentration-source.md).
 
 
-## Generate MERRA2 PM2.5 (`pm25_merra2_{year}`) and OMI NO2 (`no2_omi_{year}`) rasters
-Predictors for PM2.5 and NO2 exposure maps include MERRA2 PM2.5 and OMI NO2 respectively. Namely, we consider the difference between:
-- the year we're aiming to build an exposure map for
-- the latest/closest year available from PM2.5 and NO2 priors (i.e. van Donkelaar and Larkin respectively)
+### Parameters
 
-To build these yearly maps, if not already available in the GIS folder (`concentration` subfolder), visit https://giovanni.gsfc.nasa.gov/giovanni/
+- **`source`** — data provider. If NULL, uses pollutant default.
+- **`version`** — dataset version (e.g. `v5`, `v6`, `v4`). If NULL, uses source default.
+- **`variant`** — dataset variant for sub-products (e.g. `no_ssdust`, `m3m`/`sm8h`).
+- **`scale_year`** — applies temporal scaling (NO2 larkin: multiplicative OMI ratio). Only available for certain datasets.
+- **`grid_raster`** — optional SpatRaster to resample the result to.
 
-Here are the datasets you need to build yearly-averaged maps of:
-- PM2.5: Total Surface Mass Concentration - PM 2.5 M2TMNXAER v5.12.4
-- NO2: NO2 Tropospheric Column (30% Cloud Screened) (OMNO2d v003)
+## CI / Testing
 
-Once built, download in `.tif` format and copy the files in `gis/concentration` with the names:
-- PM2.5: pm25_merra2_{year}.tif
-- NO2: no2_omi_{year}.tif
+Tests run inside a Docker image that has concentration data baked in from Google Cloud Storage, similar to [creahia](https://github.com/energyandcleanair/creahia).
 
-These files will be used by `data.pm25_merra2_diff` and `data.no2_omi_diff` respectively.
+### CI image
+
+The image is built by the **Build CI Docker Image** workflow and published to:
+
+```
+ghcr.io/energyandcleanair/creaexposure/ci-image
+```
+
+It contains:
+- R 4.4.1 with geospatial system libraries (GDAL, GEOS, PROJ, etc.)
+- Pre-installed R dependencies (`creahelpers`, `rcrea`, etc.)
+- Concentration data synced from `gs://crea-data/gis/concentration/` into `/work/gis/concentration/`
+
+The test workflow runs `devtools::test()` inside this container with `GIS_DIR=/work/gis`. Tests **require** the GIS data to be present and will fail without it.
+
+### Test data manifest
+
+The CI image only downloads the specific GCS files listed in [tests/gcs_test_files.txt](tests/gcs_test_files.txt). To add data for new tests, append the path (relative to `gs://crea-data/gis/`) to that file — the Dockerfile reads it automatically.
+
+### GCS authentication
+
+The Docker build downloads data using a GCP service account key (same one used by creahia — both access `gs://crea-data/gis/`).
+
+To set it up:
+
+1. Base64-encode the service account JSON key:
+   ```bash
+   cat path/to/crea-aq-data-XXXX.json | base64
+   ```
+2. Add the output as a GitHub repository secret named **`GCS_SERVICE_ACCOUNT_KEY`** (Settings > Secrets and variables > Actions).
+
+### Rebuilding the CI image
+
+The image rebuilds automatically when `Dockerfile.ci` is pushed to `master`. It can also be triggered manually via the GitHub Actions UI.
+

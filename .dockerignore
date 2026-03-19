@@ -1,0 +1,15 @@
+.git
+.Rproj.user
+.RData
+.Rhistory
+.Renviron
+data/
+results/
+diagnostics/
+projects/
+cache/
+rosm.cache/
+.vscode/
+.claude/
+*.tar.gz
+*.Rcheck/
