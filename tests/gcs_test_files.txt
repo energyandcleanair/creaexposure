@@ -1,6 +1,10 @@
-# GCS files required for CI tests (one path per line, relative to gs://crea-data/gis/)
+# GCS test data manifest (one entry per line, relative to gs://crea-data/gis/)
 # Used by Dockerfile.ci to download only what's needed for testing.
-# Add new lines here when tests require additional data files.
+#
+# Supported formats:
+#   path/to/file.tif          — download a single file
+#   path/to/folder/*.tif      — download matching files (gsutil glob)
+#   path/to/folder/           — sync entire folder (trailing slash)
 #
 # Required by: test_year.R ("Mid-year works")
 concentration/pm25/vandonkelaar/v5/V5GL0502.HybridPM25.Global.202301-202312.tif
