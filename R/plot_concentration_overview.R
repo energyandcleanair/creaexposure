@@ -64,7 +64,8 @@ plot_concentration_overview <- function(pollutants = NULL,
           }, error = function(e) NULL)
 
           if (!is.null(path) && file.exists(path)) {
-            label <- paste0(toupper(poll), " | ", src, " ", ver)
+            ver_label <- if (ver != "default") paste0(" ", ver) else ""
+            label <- paste0(toupper(poll), " | ", src, ver_label)
             if (!is.null(variants)) {
               label <- paste0(label, " (", variants, ")")
             }
@@ -90,7 +91,8 @@ plot_concentration_overview <- function(pollutants = NULL,
               }, error = function(e) NULL)
 
               if (!is.null(path_v) && file.exists(path_v)) {
-                label <- paste0(toupper(poll), " | ", src, " ", ver, " (", v, ")")
+                ver_label <- if (ver != "default") paste0(" ", ver) else ""
+                label <- paste0(toupper(poll), " | ", src, ver_label, " (", v, ")")
                 entries[[length(entries) + 1]] <- list(
                   pollutant = poll, source = src, version = ver,
                   year = NA, variant = v, path = path_v, label = label
@@ -113,7 +115,8 @@ plot_concentration_overview <- function(pollutants = NULL,
           path <- .concentration_path(poll, src, ver, fn)
 
           if (file.exists(path)) {
-            label <- paste0(toupper(poll), " | ", src, " ", ver, " ", yr)
+            ver_label <- if (ver != "default") paste0(" ", ver) else ""
+            label <- paste0(toupper(poll), " | ", src, ver_label, " ", yr)
             entries[[length(entries) + 1]] <- list(
               pollutant = poll, source = src, version = ver,
               year = yr, variant = variant, path = path, label = label

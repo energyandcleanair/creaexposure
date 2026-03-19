@@ -80,6 +80,11 @@ get_concentration_closest_year("pm25", source = "vandonkelaar", year = 2023)
 
 Units are stored in the registry and set on the returned `SpatRaster` via `terra::units(r)`.
 
+## Adding a new concentration source
+
+See [docs/adding-a-concentration-source.md](docs/adding-a-concentration-source.md).
+
+
 ### Parameters
 
 - **`source`** — data provider. If NULL, uses pollutant default.
@@ -127,6 +132,3 @@ To set it up:
 
 The image rebuilds automatically when `Dockerfile.ci` is pushed to `master`. It can also be triggered manually via the GitHub Actions UI.
 
-## Adding a new concentration source
-
-See [docs/adding-a-concentration-source.md](docs/adding-a-concentration-source.md).
