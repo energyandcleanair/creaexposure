@@ -2,7 +2,7 @@ name: Build CI Docker Image
 
 on:
   push:
-    branches: [ master, feat/new_exposure_folder_structure ]
+    branches: [ master ]
     paths:
       - 'Dockerfile.ci'
       - 'tests/gcs_test_files.txt'
