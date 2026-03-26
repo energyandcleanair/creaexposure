@@ -108,6 +108,16 @@
           file_template = function(year, variant = NULL) paste0(year, ".tif")
         )
       )
+    ),
+    ait = list(
+      default_version = "default",
+      versions = list(
+        default = list(
+          unit = "µg/m3",
+          year_regex = "^no2_ait_(\\d{4})\\.tif$",
+          file_template = function(year, variant = NULL) paste0("no2_ait_", year, ".tif")
+        )
+      )
     )
   ),
   o3 = list(
