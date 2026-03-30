@@ -55,6 +55,9 @@ r <- get_concentration("pm25", source = "vandonkelaar", version = "v5", year = 2
 # NO2 (Larkin, temporally scaled to 2023 via OMI ratio)
 r <- get_concentration("no2", source = "larkin", scale_year = 2023)
 
+# NO2 (AIT)
+r <- get_concentration("no2", source = "ait", year = 2022)
+
 # O3 (GEOSChem, specific layer)
 r <- get_concentration("o3", source = "geoschem", variant = "sm8h")
 
@@ -76,6 +79,7 @@ get_concentration_closest_year("pm25", source = "vandonkelaar", year = 2023)
 | NO2 | `larkin` (default) | `default` | µg/m3 | Single year (2011), use `scale_year` for temporal adjustment |
 | NO2 | `omi` | `default` | molecules/cm2 | Used as ratio for temporal scaling |
 | NO2 | `tap` | `china` | µg/m3 | China 1km from tapdata.org.cn |
+| NO2 | `ait` | `default` | µg/m3 | Global 0.1 deg  |
 | O3 | `geoschem` (default) | `default` | unknown | Variants: `m3m` (default), `sm8h` |
 
 Units are stored in the registry and set on the returned `SpatRaster` via `terra::units(r)`.
