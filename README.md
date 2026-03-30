@@ -56,7 +56,7 @@ r <- get_concentration("pm25", source = "vandonkelaar", version = "v5", year = 2
 r <- get_concentration("no2", source = "larkin", scale_year = 2023)
 
 # NO2 (AIT)
-r <- get_concentration("no2", source = "ait", scale_year = 2022)
+r <- get_concentration("no2", source = "ait", year = 2022)
 
 # O3 (GEOSChem, specific layer)
 r <- get_concentration("o3", source = "geoschem", variant = "sm8h")
