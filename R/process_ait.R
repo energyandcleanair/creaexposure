@@ -1,4 +1,4 @@
-#' Process GlobalNO2_AIT (https://zenodo.org/records/13842191/) concentration files
+#' Process GlobalNO2_AIT (https://zenodo.org/records/13842191) concentration files
 #'
 #' Downloads the Annually.nc file from GlobalNO2_AIT, extracts the specified year,
 #' converts from ppb to µg/m³, and writes to .tif.
@@ -11,7 +11,7 @@
 #'
 #' @return Path to the processed .tif file (invisibly).
 #' @export
-process_GlobalNO2_AIT <- function(year) {
+process_ait <- function(year) {
 
   out_dir <- .concentration_dir("no2", "ait", "default")
   dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
@@ -49,7 +49,7 @@ process_GlobalNO2_AIT <- function(year) {
   }
 
   message(glue::glue("Extracting NO2_AiT for {year} (time index {time_idx})..."))
-  r <- .nc_year_to_rast(nc_grid, time_idx)
+  r <- .ait_nc_year_to_rast(nc_grid, time_idx)
 
   message(glue::glue("Saving to: {out_path}"))
   terra::writeRaster(r, out_path, overwrite = TRUE)
@@ -70,7 +70,7 @@ process_GlobalNO2_AIT <- function(year) {
 #' @param nc_grid An open ncdf4 connection.
 #' @param time_idx Integer. Index along the time dimension to extract.
 #' @return A SpatRaster in EPSG:4326 with values in µg/m³.
-.nc_year_to_rast <- function(nc_grid, time_idx) {
+.ait_nc_year_to_rast <- function(nc_grid, time_idx) {
   no2_slice <- ncdf4::ncvar_get(nc_grid, "NO2_AiT",
     start = c(1, 1, time_idx),
     count = c(-1, -1, 1)
@@ -83,8 +83,8 @@ process_GlobalNO2_AIT <- function(year) {
   r <- terra::flip(r, direction = "vertical")
   terra::ext(r) <- terra::ext(min(lon), max(lon), min(lat), max(lat))
   terra::crs(r) <- "EPSG:4326"
-  ###### Not sure about the unit. Maybe ppb? #####
-  r <- r * 1.88 # ppb → µg/m³
+  # Unit is ppbv (confirmed from Mu et al. 2026, https://doi.org/10.5194/essd-2025-821)
+  r <- r * 1.88 # ppb → µg/m³ (standard NO2 conversion at 20°C, 1 atm)
 
   return(r)
 }
