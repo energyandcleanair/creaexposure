@@ -6,8 +6,6 @@
 #' Data is organized as: no2/ait/default/no2_ait_{year}.tif
 #'
 #' @param year Integer. Year to process (2005–2023).
-#' @param cache_dir Character. Directory to cache the downloaded .nc file.
-#'   Defaults to "cache".
 #'
 #' @return Path to the processed .tif file (invisibly).
 #' @export
@@ -32,10 +30,14 @@ process_ait <- function(year) {
   if (!file.exists(nc_path)) {
     download_link <- "https://zenodo.org/records/13842191/files/Annually.nc?download=1"
     message("Downloading GlobalNO2_AIT Annually.nc...")
-    httr::GET(download_link, httr::write_disk(nc_path, overwrite = TRUE))
+    status <- utils::download.file(download_link, destfile = nc_path, mode = "wb", quiet = TRUE)
+    if (!file.exists(nc_path) || status != 0 || file.size(nc_path) == 0) {
+      stop("Failed to download GlobalNO2_AIT Annually.nc from ", download_link)
+    }
   }
 
   nc_grid <- ncdf4::nc_open(nc_path)
+  on.exit(ncdf4::nc_close(nc_grid), add = TRUE)  # ← add this line
 
   time_vals <- ncdf4::ncvar_get(nc_grid, "time")
   time_idx <- which(as.Date("2005-12-31") + time_vals == as.Date(paste0(year, "-12-31")))
@@ -55,7 +57,6 @@ process_ait <- function(year) {
   terra::writeRaster(r, out_path, overwrite = TRUE)
 
   # Clean up raw downloads
-  ncdf4::nc_close(nc_grid)
   if (dir.exists(raw_dir)) {
     unlink(raw_dir, recursive = TRUE)
     message("Cleaned up raw downloads: ", raw_dir)
@@ -84,7 +85,7 @@ process_ait <- function(year) {
   terra::ext(r) <- terra::ext(min(lon), max(lon), min(lat), max(lat))
   terra::crs(r) <- "EPSG:4326"
   # Unit is ppbv (confirmed from Mu et al. 2026, https://doi.org/10.5194/essd-2025-821)
-  r <- r * 1.88 # ppb → µg/m³ (standard NO2 conversion at 20°C, 1 atm)
+  r <- r * 1.88 # ppb → µg/m³ (standard NO2 conversion at 25°C, 1 atm)
 
   return(r)
 }
