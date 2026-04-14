@@ -55,12 +55,12 @@ test_that(".concentration_dir builds correct path", {
   expect_true(grepl("pm25/vandonkelaar/v5$", dir))
 })
 
-test_that(".concentration_path builds correct path", {
+test_that(".concentration_path builds correct path for pm25 vandonkelaar v5", {
   path <- creaexposure:::.concentration_path("pm25", "vandonkelaar", "v5", "test.tif")
   expect_true(grepl("pm25/vandonkelaar/v5/test.tif$", path))
 })
 
-test_that(".concentration_path builds correct path", {
+test_that(".concentration_path builds correct path for no2 ait default", {
   path <- creaexposure:::.concentration_path("no2", "ait", "default", "test.tif")
   expect_true(grepl("no2/ait/default/test.tif$", path))
 })
