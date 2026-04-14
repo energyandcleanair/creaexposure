@@ -12,9 +12,26 @@
 #' @return Character vector of paths to the processed .tif files (invisibly).
 #' @export
 process_ait <- function(year = NULL) {
-
   out_dir <- .concentration_dir("no2", "ait", "default")
   dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+
+  # Check if requested years are already processed
+  if (file.exists(out_dir)) {
+    existing_files <- list.files(out_dir, pattern = "^no2_ait_\\d{4}\\.tif$", full.names = TRUE)
+    existing_years <- as.integer(stringr::str_match(basename(existing_files), "no2_ait_(\\d{4})\\.tif")[, 2])
+    if (!is.null(year)) {
+      missing_years <- setdiff(as.integer(year), existing_years)
+      if (length(missing_years) == 0) {
+        message("All requested years already processed. Returning all existing files.")
+        return(invisible(existing_files))
+      } else {
+        message("Missing years to process: ", paste(missing_years, collapse = ", "))
+      }
+    } else {
+      message("No specific year requested. Returning all existing files.")
+      return(invisible(existing_files))
+    }
+  }
 
   # Annually.nc contains all years — download once to a shared raw location
   raw_dir <- file.path(out_dir, "raw")
@@ -71,11 +88,18 @@ process_ait <- function(year = NULL) {
   }, character(1))
 
   # Clean up raw downloads
-  on.exit({
-    unlink(raw_dir, recursive = TRUE), 
-    message("Cleaned up raw downloads: ", raw_dir)
-  },add = TRUE)
-  
+  on.exit(
+    {
+      unlink(raw_dir, recursive = TRUE)
+      if (!file.exists(raw_dir)) {
+        message("Cleaned up raw downloads: ", raw_dir)
+      } else {
+        warning("Failed to clean up raw downloads: ", raw_dir)
+      }
+    },
+    add = TRUE
+  )
+
 
   return(invisible(out_paths))
 }
@@ -95,7 +119,7 @@ process_ait <- function(year = NULL) {
   lon <- ncdf4::ncvar_get(nc_grid, "longitude")
   lat <- ncdf4::ncvar_get(nc_grid, "latitude")
 
-  r <- terra::rast(t(no2_slice))           # transpose [lon, lat] → [nlat, nlon]
+  r <- terra::rast(t(no2_slice)) # transpose [lon, lat] → [nlat, nlon]
   r <- terra::flip(r, direction = "vertical")
   terra::ext(r) <- terra::ext(min(lon), max(lon), min(lat), max(lat))
   terra::crs(r) <- "EPSG:4326"
@@ -104,4 +128,3 @@ process_ait <- function(year = NULL) {
 
   return(r)
 }
-
