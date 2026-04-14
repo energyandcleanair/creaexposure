@@ -71,8 +71,11 @@ process_ait <- function(year = NULL) {
   }, character(1))
 
   # Clean up raw downloads
-  unlink(raw_dir, recursive = TRUE)
-  message("Cleaned up raw downloads: ", raw_dir)
+  on.exit({
+    unlink(raw_dir, recursive = TRUE), 
+    message("Cleaned up raw downloads: ", raw_dir)
+  },add = TRUE)
+  
 
   return(invisible(out_paths))
 }
