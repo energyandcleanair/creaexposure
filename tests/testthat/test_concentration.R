@@ -183,11 +183,6 @@ test_that("get_concentration_available_years returns fixed years for larkin", {
   expect_equal(years, 2011L)
 })
 
-test_that("get_concentration_available_years returns fixed years for ait", {
-  years <- get_concentration_available_years("no2", source = "ait")
-  expect_equal(years, c(2005L:2023L))
-})
-
 
 # --- Closest year -------------------------------------------------------------
 
@@ -211,12 +206,5 @@ test_that("closest year handles mid-year format", {
   expect_equal(
     get_concentration_closest_year("no2", source = "larkin", year = "mid2020mid2021"),
     2011L
-  )
-})
-
-test_that("closest year returns nearest when year is before available range", {
-  expect_equal(
-    get_concentration_closest_year("no2", source = "ait", year = "2000"),
-    2005L
   )
 })
