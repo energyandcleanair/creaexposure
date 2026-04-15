@@ -55,9 +55,14 @@ test_that(".concentration_dir builds correct path", {
   expect_true(grepl("pm25/vandonkelaar/v5$", dir))
 })
 
-test_that(".concentration_path builds correct path", {
+test_that(".concentration_path builds correct path for pm25 vandonkelaar v5", {
   path <- creaexposure:::.concentration_path("pm25", "vandonkelaar", "v5", "test.tif")
   expect_true(grepl("pm25/vandonkelaar/v5/test.tif$", path))
+})
+
+test_that(".concentration_path builds correct path for no2 ait default", {
+  path <- creaexposure:::.concentration_path("no2", "ait", "default", "test.tif")
+  expect_true(grepl("no2/ait/default/test.tif$", path))
 })
 
 
@@ -96,6 +101,13 @@ test_that("larkin file template is static", {
   expect_equal(config$file_template(2011), "no2_agg10_ugm3_wsg84.tif")
   expect_equal(config$file_template(2023), "no2_agg10_ugm3_wsg84.tif")
 })
+
+test_that("ait file template is static", {
+  config <- creaexposure:::.get_version_config("no2", "ait", "default")
+  expect_equal(config$file_template(2005), "no2_ait_2005.tif")
+  expect_equal(config$file_template(2023), "no2_ait_2023.tif")
+})
+
 
 test_that("geoschem O3 file template uses variant", {
   config <- creaexposure:::.get_version_config("o3", "geoschem", "default")
@@ -150,6 +162,12 @@ test_that("omi year regex extracts year", {
   config <- creaexposure:::.get_version_config("no2", "omi", "default")
   m <- stringr::str_match("no2_omi_2019.tif", config$year_regex)
   expect_equal(m[, 2], "2019")
+})
+
+test_that("ait year regex extracts year", {
+  config <- creaexposure:::.get_version_config("no2", "ait", "default")
+  m <- stringr::str_match("no2_ait_2005.tif", config$year_regex)
+  expect_equal(m[, 2], "2005")
 })
 
 

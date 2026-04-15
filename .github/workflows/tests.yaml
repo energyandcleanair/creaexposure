@@ -24,7 +24,7 @@ jobs:
     needs: resolve-image
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/energyandcleanair/creaexposure/ci-image:${{ needs.resolve-image.outputs.tag }}
+      image: ghcr.io/energyandcleanair/creaexposure/ci-image:latest
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
