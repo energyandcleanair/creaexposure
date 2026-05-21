@@ -214,7 +214,7 @@ get_concentration <- function(pollutant,
 
   # Apply temporal scaling if requested
   if (!is.null(scale_year) && !is.null(year) && scale_year != year) {
-    r <- .apply_temporal_scaling(r, pollutant, source, year, scale_year, grid_raster)
+    r <- .apply_temporal_scaling(r, pollutant, source, year, scale_year)
   }
 
   # Resample to grid if provided
@@ -352,24 +352,23 @@ get_concentration_default_source <- function(pollutant) {
   }
 }
 
-.apply_temporal_scaling <- function(r, pollutant, source, base_year, target_year, grid_raster) {
+.apply_temporal_scaling <- function(r, pollutant, source, base_year, target_year) {
   if (pollutant == "no2" && source == "larkin") {
     # Multiplicative OMI ratio for temporal adjustment
     omi_base <- get_concentration("no2", source = "omi", year = base_year)
     omi_target <- get_concentration("no2", source = "omi", year = target_year)
 
-    if (!is.null(grid_raster)) {
-      omi_base <- omi_base %>% terra::resample(terra::rast(grid_raster), method = "bilinear")
-      omi_target <- omi_target %>% terra::resample(terra::rast(grid_raster), method = "bilinear")
-    }
-
-    # Smooth to reduce noise
+    # Smooth at OMI's native resolution to reduce noise
     focal_w <- terra::focalMat(omi_base, d = 1, type = "circle")
     focal_w[focal_w > 0] <- 1
     omi_base_smooth <- terra::focal(omi_base, w = focal_w, fun = mean, na.rm = TRUE, pad = TRUE)
     omi_target_smooth <- terra::focal(omi_target, w = focal_w, fun = mean, na.rm = TRUE, pad = TRUE)
 
     ratio <- omi_target_smooth / omi_base_smooth
+
+    # Resample ratio to r's grid so multiplication aligns. The caller in
+    # get_concentration() resamples the scaled raster to grid_raster afterwards.
+    ratio <- ratio %>% terra::resample(r, method = "bilinear")
     r <- r * ratio
   }
   return(r)

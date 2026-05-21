@@ -29,7 +29,7 @@ test_that("scaling multiplies NO2 larkin by OMI ratio", {
   )
 
   result <- creaexposure:::.apply_temporal_scaling(
-    base_rast, "no2", "larkin", base_year = 2011, target_year = 2023, grid_raster = NULL
+    base_rast, "no2", "larkin", base_year = 2011, target_year = 2023
   )
 
   # Uniform OMI ratio of 200/100 = 2, so values should be ~20
@@ -47,7 +47,7 @@ test_that("scaling with uniform OMI ratio of 1 is identity", {
   )
 
   result <- creaexposure:::.apply_temporal_scaling(
-    base_rast, "no2", "larkin", base_year = 2011, target_year = 2023, grid_raster = NULL
+    base_rast, "no2", "larkin", base_year = 2011, target_year = 2023
   )
 
   vals <- terra::values(result)
@@ -58,7 +58,7 @@ test_that("scaling is a no-op for non-larkin sources", {
   r <- make_raster(42)
 
   result <- creaexposure:::.apply_temporal_scaling(
-    r, "no2", "omi", base_year = 2011, target_year = 2023, grid_raster = NULL
+    r, "no2", "omi", base_year = 2011, target_year = 2023
   )
 
   expect_equal(terra::values(result), terra::values(r))
@@ -68,7 +68,7 @@ test_that("scaling is a no-op for PM2.5", {
   r <- make_raster(15)
 
   result <- creaexposure:::.apply_temporal_scaling(
-    r, "pm25", "vandonkelaar", base_year = 2020, target_year = 2023, grid_raster = NULL
+    r, "pm25", "vandonkelaar", base_year = 2020, target_year = 2023
   )
 
   expect_equal(terra::values(result), terra::values(r))
@@ -88,7 +88,7 @@ test_that("scaling preserves spatial properties", {
   )
 
   result <- creaexposure:::.apply_temporal_scaling(
-    base_rast, "no2", "larkin", base_year = 2011, target_year = 2023, grid_raster = NULL
+    base_rast, "no2", "larkin", base_year = 2011, target_year = 2023
   )
 
   expect_equal(terra::nrow(result), terra::nrow(base_rast))
@@ -110,7 +110,7 @@ test_that("scaling halves values when OMI target is half of base", {
   )
 
   result <- creaexposure:::.apply_temporal_scaling(
-    base_rast, "no2", "larkin", base_year = 2015, target_year = 2023, grid_raster = NULL
+    base_rast, "no2", "larkin", base_year = 2015, target_year = 2023
   )
 
   vals <- terra::values(result)
