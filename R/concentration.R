@@ -165,7 +165,9 @@
 #'   If NULL, uses the default version for the source.
 #' @param variant Character. Variant of the dataset (e.g., "no_ssdust" for
 #'   vandonkelaar v4, "m3m"/"sm8h" for geoschem O3). If NULL, uses default.
-#' @param grid_raster Optional SpatRaster to resample the result to.
+#' @param grid_raster Optional SpatRaster. The result is reprojected and fitted
+#'   to this grid (CRS, resolution and extent), so it may differ from the
+#'   source CRS (e.g. a UTM grid from a CALPUFF workflow).
 #' @param scale_year Optional numeric. If provided, applies temporal scaling
 #'   (e.g., for NO2 larkin: applies OMI ratio from base year to scale_year).
 #'
@@ -217,9 +219,12 @@ get_concentration <- function(pollutant,
     r <- .apply_temporal_scaling(r, pollutant, source, year, scale_year)
   }
 
-  # Resample to grid if provided
+  # Fit to grid if provided. Use project() rather than resample() so the result
+  # is reprojected when grid_raster is in a different CRS than the source data
+  # (e.g. UTM grids from CALPUFF workflows vs. the lon/lat source rasters).
+  # When the CRSs already match, project() simply resamples.
   if (!is.null(grid_raster)) {
-    r <- r %>% terra::resample(terra::rast(grid_raster), method = "bilinear")
+    r <- r %>% terra::project(terra::rast(grid_raster), method = "bilinear")
   }
 
   names(r) <- pollutant
